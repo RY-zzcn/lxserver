@@ -18,25 +18,25 @@
         }
     },
     {
-        "comment": "=== 版本更新 v1.4.0 ===",
-        "id": "update_v1_4_0",
+        "comment": "=== 版本更新 v1.4.1 ===",
+        "id": "update_v1_4_1",
         "status": "active",
         "type": "version",
         "logic": {
-            "target_version": "v1.4.0",
+            "target_version": "v1.4.1",
             "operator": "<",
             "interval_hours": 24
         },
         "ui": {
-            "title": "发现新版本 v1.4.0",
+            "title": "发现新版本 v1.4.1",
             "date": "2026-02-17",
-            "message": "本次更新引入了音频可视化和完善的缓存管理功能：\n1. 🎵 全新音频可视化：支持多种动态频谱效果，高度可定制\n2. 💾 本地缓存系统：缓存歌词、链接和歌曲文件，大幅提升性能\n3. 📊 缓存统计管理：实时查看存储占用，一键清除各类缓存\n4. 🔄 版本更新优化：强化自动刷新机制，更新后无需手动清除缓存\n5. 🐛 兼容性修复：解决 Node.js 旧版本运行问题",
+            "message": "本次更新引入了全局键盘快捷键功能并优化了播放逻辑：\n1. ⌨️ 全局快捷键：支持 Space 播放暂停、[ ] 切歌、Alt+1-4 换页等核心操作\n2. ⏩ 智能跳转：方向键支持 5% 步进和长按连续跳转，操作更精准\n3. 🌊 逻辑优化：修复切歌残留播放问题，增强淡入淡出兼容性\n4. 🎨 布局修复：优化频谱开启后的界面居中显示及底部边距\n5. � 更多更新详见版本日志记录",
             "confirm_text": "去查看",
             "cancel_text": "稍后提醒"
         },
         "action": {
             "type": "link",
-            "url": "https://github.com/XCQ0607/lxserver/releases/tag/v1.4.0"
+            "url": "https://github.com/XCQ0607/lxserver/releases/tag/v1.4.1"
         }
     }
 ]

@@ -138,28 +138,37 @@ const musicVisualizer = (function () {
             waveFooter.addAnimation(new AnimationClass(options));
             footerCanvas.style.opacity = opacity;
 
+            // 调整内容区域高度
+            const footerIsHidden = playerFooter && playerFooter.classList.contains('translate-y-[110%]');
+
             // 增加容器高度和 Footer 高度
             visualizerContainer.style.height = '100px';
+            visualizerContainer.style.zIndex = '1';
+            visualizerContainer.style.display = 'flex'; // 确保可见
             if (playerFooter) {
                 playerFooter.style.transition = 'height 0.3s ease';
                 playerFooter.style.height = '150px';
+                playerFooter.style.justifyContent = 'center'; // [Fix] 增加高度后内容保持垂直居中
             }
 
-            // 调整主内容区域的底部 Padding 以防被遮挡 (Default pb-32 = 128px -> 180px for safety)
+            // [Important] 如果音频正在播放但 Context 挂起了（常见于浏览器策略），立即恢复
+            if (audioContext && audioContext.state === 'suspended' && audio && !audio.paused) {
+                audioContext.resume();
+            }
+
+            // 调整内容区域的底部 Padding 以防被遮挡
             const mainViews = document.querySelectorAll('#view-search, #view-favorites, #view-settings, #view-about, #view-player-detail');
             mainViews.forEach(view => {
                 view.style.transition = 'padding-bottom 0.3s ease';
-                view.style.paddingBottom = '180px';
+                // 如果 Footer 已经隐藏了，不需要额外 Padding
+                view.style.paddingBottom = footerIsHidden ? '' : '180px';
             });
 
             // 调整侧边栏底部 Padding
             const sidebar = document.querySelector('aside');
             if (sidebar) {
                 sidebar.style.transition = 'padding-bottom 0.3s ease';
-                // Sidebar 默认是 h-screen flex flex-col，底部没有固定 padding，但是 footer 是 fixed
-                // 所以给 sidebar 增加底部 padding 防止内容被遮挡
-                // Footer Height = 150px, so we need > 150px padding
-                sidebar.style.paddingBottom = '160px';
+                sidebar.style.paddingBottom = footerIsHidden ? '' : '160px';
             }
         } else if (footerCanvas && visualizerContainer) {
             footerCanvas.style.opacity = '0';
@@ -167,6 +176,7 @@ const musicVisualizer = (function () {
             footerCanvas.style.width = '100%'; // 复原宽度
             if (playerFooter) {
                 playerFooter.style.height = '';
+                playerFooter.style.justifyContent = ''; // 复原
             }
             // 复原 Padding
             const mainViews = document.querySelectorAll('#view-search, #view-favorites, #view-settings, #view-about, #view-player-detail');

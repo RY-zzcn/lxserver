@@ -1345,6 +1345,63 @@
                                         </label>
                                     </div>
                                 </div>
+
+                                <!-- Keyboard Shortcuts -->
+                                <div
+                                    class="bg-white rounded-xl border border-gray-100 p-4 hover:shadow-sm transition-shadow">
+                                    <div class="flex items-center justify-between mb-4">
+                                        <div>
+                                            <h4 class="text-sm font-bold text-gray-800">按键快捷方式 (Keyboard Shortcuts)</h4>
+                                            <p class="text-xs text-gray-400 mt-1">
+                                                启用后可使用键盘控制播放。
+                                            </p>
+                                        </div>
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" id="setting-enable-shortcuts" class="sr-only peer"
+                                                onchange="updateSetting('enableKeyboardShortcuts', this.checked)">
+                                            <div
+                                                class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500">
+                                            </div>
+                                        </label>
+                                    </div>
+                                    <div
+                                        class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-[10px] text-gray-500 border-t border-gray-50 pt-3">
+                                        <div class="flex justify-between items-center"><span>播放/暂停 (Play/Pause)</span>
+                                            <span
+                                                class="bg-gray-100 px-2 py-0.5 rounded-md font-mono border border-gray-200">Space</span>
+                                        </div>
+                                        <div class="flex justify-between items-center"><span>上一曲/下一曲 (Prev/Next)</span>
+                                            <span
+                                                class="bg-gray-100 px-2 py-0.5 rounded-md font-mono border border-gray-200">[
+                                                / ]</span>
+                                        </div>
+                                        <div class="flex justify-between items-center"><span>音量加/减 (Volume)</span> <span
+                                                class="bg-gray-100 px-2 py-0.5 rounded-md font-mono border border-gray-200">↑
+                                                / ↓</span></div>
+                                        <div class="flex justify-between items-center"><span>快进/后退 (Seek)</span>
+                                            <div class="flex flex-col items-end"><span
+                                                    class="bg-gray-100 px-2 py-0.5 rounded-md font-mono border border-gray-200">→
+                                                    / ←</span><span class="text-[8px] text-emerald-500/60 mt-0.5">Hold
+                                                    for smooth seek</span></div>
+                                        </div>
+                                        <div class="flex justify-between items-center"><span>切换页签 (Switch Tab)</span>
+                                            <span
+                                                class="bg-gray-100 px-2 py-0.5 rounded-md font-mono border border-gray-200">Alt
+                                                + 1-4</span>
+                                        </div>
+                                        <div class="flex justify-between items-center"><span>歌词页开关 (Lyrics)</span> <span
+                                                class="bg-gray-100 px-2 py-0.5 rounded-md font-mono border border-gray-200">L</span>
+                                        </div>
+                                        <div class="flex justify-between items-center"><span>显示底部波形 (Visualizer)</span>
+                                            <span
+                                                class="bg-gray-100 px-2 py-0.5 rounded-md font-mono border border-gray-200">F</span>
+                                        </div>
+                                        <div class="flex justify-between items-center"><span>显示详情波形 (Detail Vis)</span>
+                                            <span
+                                                class="bg-gray-100 px-2 py-0.5 rounded-md font-mono border border-gray-200">G</span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 

@@ -46,6 +46,7 @@ let settings = {
     autoResume: true, // 自动恢复进度 (默认开启)
     showSidebarSongInfo: true, // 展示侧边栏封面
     enableCrossfade: true, // 音频淡入淡出
+    enableKeyboardShortcuts: true, // 按键快捷方式 (默认开启)
     showLyricTranslation: true, // 显示歌词翻译
     showLyricRoma: false, // 显示歌词罗马音
     swapLyricTransRoma: false, // 交换翻译与罗马音位置
@@ -287,6 +288,9 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('touchmove', handleDragMove, { passive: false });
     window.addEventListener('mouseup', stopDragging);
     window.addEventListener('touchend', stopDragging);
+
+    // 同步所有设置 UI
+    syncSettingsUI();
 });
 
 // Dragging Logic
@@ -1302,10 +1306,13 @@ async function playSong(song, index, forceQuality = null, noPlay = false, isRetr
     // 显示加载状态
     setPlayerStatus('正在获取播放链接...');
 
-    // [Crossfade] 如果开启了淡入淡出，则先并行执行淡出
+    // [Crossfade] 如果开启了淡入淡出，则先执行淡出
     if (settings.enableCrossfade && !noPlay && audio && !audio.paused && audio.src) {
-        fadeVolume(0, 600);
-    } else if (!noPlay) {
+        // [Improvement] 等待一个快速的淡出 (300ms)，确保切换时听感顺滑并能触发暂停
+        await fadeVolume(0, 300);
+    }
+
+    if (!noPlay) {
         try { audio.pause(); } catch (e) { } // 确保上一首立即停止
     }
     updatePlayButton(false); // 暂停按钮状态
@@ -1375,7 +1382,19 @@ async function playSong(song, index, forceQuality = null, noPlay = false, isRetr
                 setPlayerStatus('', true); // 使用智能状态显示
                 if (!noPlay) {
                     try {
+                        // [Crossfade] 如果开启了淡入淡出，播放前先将音量降为 0，准备淡入
+                        if (settings.enableCrossfade) {
+                            audio.volume = 0;
+                        } else {
+                            audio.volume = typeof currentVolume !== 'undefined' ? currentVolume : 1;
+                        }
+
                         await audio.play();
+
+                        if (settings.enableCrossfade) {
+                            fadeVolume(typeof currentVolume !== 'undefined' ? currentVolume : 1, 1000);
+                        }
+
                         updatePlayButton(true);
                     } catch (e) {
                         console.error("[Player] Auto-play failed:", e);
@@ -1425,7 +1444,19 @@ async function playSong(song, index, forceQuality = null, noPlay = false, isRetr
                 setPlayerStatus('', true); // 使用智能状态显示
                 if (!noPlay) {
                     try {
+                        // [Crossfade] 如果开启了淡入淡出，播放前先将音量降为 0，准备淡入
+                        if (settings.enableCrossfade) {
+                            audio.volume = 0;
+                        } else {
+                            audio.volume = typeof currentVolume !== 'undefined' ? currentVolume : 1;
+                        }
+
                         await audio.play();
+
+                        if (settings.enableCrossfade) {
+                            fadeVolume(typeof currentVolume !== 'undefined' ? currentVolume : 1, 1000);
+                        }
+
                         updatePlayButton(true);
                     } catch (e) {
                         console.error("[Player] Auto-play failed:", e);
@@ -1799,11 +1830,27 @@ function updatePlayerInfo(song) {
     }
 }
 
-function togglePlay() {
+async function togglePlay() {
     if (audio.paused) {
-        audio.play().catch(e => console.error("Play blocked:", e));
-        updatePlayButton(true);
+        try {
+            // [Crossfade] 如果开启了淡入淡出，先将进度置为 0，播放后再淡入
+            if (settings.enableCrossfade) {
+                audio.volume = 0;
+            }
+            await audio.play();
+            updatePlayButton(true);
+
+            if (settings.enableCrossfade) {
+                fadeVolume(typeof currentVolume !== 'undefined' ? currentVolume : 1, 600);
+            }
+        } catch (e) {
+            console.error("[Player] Play blocked:", e);
+        }
     } else {
+        // [Crossfade] 如果开启了淡入淡出，先淡出再暂停
+        if (settings.enableCrossfade) {
+            await fadeVolume(0, 600);
+        }
         audio.pause();
         updatePlayButton(false);
     }
@@ -2480,8 +2527,121 @@ function loadSettings() {
     syncSettingsUI();
 }
 
+// ========== 键盘快捷键逻辑 ==========
+let seekTimer = null;
+let isLongPress = false;
+
+function handleSeekKey(direction, action) {
+    if (action === 'down') {
+        if (seekTimer) return; // 已经在处理中
+
+        // 初始步长跳转 (默认 5% 长度)
+        let delta = direction === 'forward' ? 10 : -10;
+        if (audio.duration && Number.isFinite(audio.duration)) {
+            delta = audio.duration * (direction === 'forward' ? 0.05 : -0.05);
+        }
+
+        audio.currentTime = Math.max(0, Math.min(audio.duration, audio.currentTime + delta));
+
+        // 设置长按逻辑 (500ms 后进入连续推进模式)
+        seekTimer = setTimeout(() => {
+            isLongPress = true;
+            seekTimer = setInterval(() => {
+                const step = direction === 'forward' ? 2 : -2; // 每 100ms 推进 2s = 20s/s
+                audio.currentTime = Math.max(0, Math.min(audio.duration, audio.currentTime + step));
+            }, 100);
+        }, 500);
+    } else {
+        // 松开按键，重置状态
+        if (seekTimer) {
+            if (isLongPress) clearInterval(seekTimer);
+            else clearTimeout(seekTimer);
+            seekTimer = null;
+            isLongPress = false;
+        }
+    }
+}
+
+function changeVolume(delta) {
+    currentVolume = Math.max(0, Math.min(1, currentVolume + delta));
+    audio.volume = currentVolume;
+    isMuted = false;
+    updateVolumeUI();
+    try {
+        localStorage.setItem('lx_volume', currentVolume.toString());
+    } catch (e) { }
+}
+
+// 注册全局键盘监听
+document.addEventListener('keydown', (e) => {
+    if (!settings.enableKeyboardShortcuts) return;
+
+    // 如果焦点在输入框中，忽略快捷键
+    const target = e.target;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+    }
+
+    switch (e.code) {
+        case 'Space':
+            e.preventDefault();
+            togglePlay();
+            break;
+        case 'ArrowUp':
+            e.preventDefault();
+            changeVolume(0.05);
+            break;
+        case 'ArrowDown':
+            e.preventDefault();
+            changeVolume(-0.05);
+            break;
+        case 'ArrowLeft':
+            e.preventDefault();
+            handleSeekKey('backward', 'down');
+            break;
+        case 'ArrowRight':
+            e.preventDefault();
+            handleSeekKey('forward', 'down');
+            break;
+        case 'BracketLeft': // '['
+            playPrev();
+            break;
+        case 'BracketRight': // ']'
+            playNext();
+            break;
+        case 'KeyL':
+            toggleLyrics();
+            break;
+        case 'Digit1':
+            if (e.altKey) switchTab('search');
+            break;
+        case 'Digit2':
+            if (e.altKey) switchTab('favorites');
+            break;
+        case 'Digit3':
+            if (e.altKey) switchTab('settings');
+            break;
+        case 'Digit4':
+            if (e.altKey) switchTab('about');
+            break;
+        case 'KeyF':
+            updateSetting('showFooterVisualizer', !settings.showFooterVisualizer);
+            break;
+        case 'KeyG':
+            updateSetting('showDetailVisualizer', !settings.showDetailVisualizer);
+            break;
+    }
+});
+
+document.addEventListener('keyup', (e) => {
+    if (!settings.enableKeyboardShortcuts) return;
+    if (e.code === 'ArrowLeft') handleSeekKey('backward', 'up');
+    if (e.code === 'ArrowRight') handleSeekKey('forward', 'up');
+});
+
 function updateSetting(key, value) {
     settings[key] = value;
+    window.settings = settings; // 确保全局引用同步
     try {
         localStorage.setItem('lx_settings', JSON.stringify(settings));
         console.log(`[Settings] ${key} 已更新为:`, value);
@@ -2492,9 +2652,19 @@ function updateSetting(key, value) {
     syncSettingsUI(key, value);
 
     // Special handlers for visual changes
-    if (key.includes('Visualizer')) {
+    if (key.includes('Visualizer') || key.startsWith('visualizer')) {
         if (window.musicVisualizer) {
+            // 如果正在播放且开启了开关，尝试强制初始化 (防止第一次点击开关没反应)
+            if (typeof audio !== 'undefined' && !audio.paused && (settings.showFooterVisualizer || settings.showDetailVisualizer)) {
+                window.musicVisualizer.init();
+            }
             window.musicVisualizer.applySettings();
+        }
+
+        // 更新透明度数值显示
+        if (key === 'visualizerOpacity') {
+            const el = document.getElementById('visualizer-opacity-value');
+            if (el) el.innerText = value;
         }
     }
 }
@@ -2524,6 +2694,11 @@ function syncSettingsUI(key = null, value = null) {
 
         if (key === 'enableCrossfade') {
             const check = document.getElementById('setting-enable-crossfade');
+            if (check) check.checked = value;
+        }
+
+        if (key === 'enableKeyboardShortcuts') {
+            const check = document.getElementById('setting-enable-shortcuts');
             if (check) check.checked = value;
         }
 
@@ -2638,6 +2813,11 @@ function syncSettingsUI(key = null, value = null) {
     const crossfade = document.getElementById('setting-enable-crossfade');
     if (crossfade) {
         crossfade.checked = settings.enableCrossfade !== false;
+    }
+
+    const shortcuts = document.getElementById('setting-enable-shortcuts');
+    if (shortcuts) {
+        shortcuts.checked = settings.enableKeyboardShortcuts !== false;
     }
 
     // 歌词设置同步
@@ -5542,6 +5722,11 @@ function togglePlayerPanel() {
             lyricsWrapper.classList.remove('max-h-[60vh]');
             lyricsWrapper.classList.add('h-full');
         }
+    }
+
+    // [New] 触发可视化模块更新布局 (Padding 处理)
+    if (window.musicVisualizer) {
+        window.musicVisualizer.applySettings();
     }
 
     // 重新校准歌词位置 (动画结束后执行)
