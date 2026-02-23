@@ -35,7 +35,16 @@ function getDirectoryHash(dir, exclude = [], extensions = []) {
     const hash = crypto.createHash('md5');
     for (const file of files) {
         const content = fs.readFileSync(file);
-        hash.update(content);
+        const ext = path.extname(file).toLowerCase();
+        const textExtensions = ['.js', '.ts', '.json', '.html', '.css', '.md'];
+
+        if (textExtensions.includes(ext)) {
+            // 统一将 CRLF 转换为 LF 再计算 Hash，确保跨平台一致性
+            const text = content.toString('utf8').replace(/\r\n/g, '\n');
+            hash.update(text);
+        } else {
+            hash.update(content);
+        }
     }
 
     return hash.digest('hex');
