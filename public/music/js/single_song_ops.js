@@ -1,12 +1,12 @@
 // Single song deletion
 async function deleteSingleSong(songId) {
-    if (!confirm('确定要删除这首歌曲吗?')) {
+    if (!(await showSelect('删除歌曲', '确定要删除这首歌曲吗?', { danger: true }))) {
         return;
     }
 
     const activeListId = getCurrentActiveListId();
     if (!activeListId || !currentListData) {
-        alert('无法确定当前列表');
+        showError('无法确定当前列表');
         return;
     }
 
@@ -16,7 +16,7 @@ async function deleteSingleSong(songId) {
         const password = localStorage.getItem('lx_sync_pass');
 
         if (!username || !password) {
-            alert('请先登录本地账号');
+            showError('请先登录本地账号');
             return;
         }
 
@@ -53,7 +53,7 @@ async function deleteSingleSong(songId) {
             console.log('[Single] 本地模式删除成功');
 
         } catch (e) {
-            alert('删除失败: ' + e.message);
+            showError('删除失败: ' + e.message);
             console.error('[Single] 删除错误:', e);
         }
     } else if (window.SyncManager.mode === 'remote') {
@@ -87,7 +87,7 @@ async function deleteSingleSong(songId) {
             handleListClick(activeListId);
 
         } catch (e) {
-            alert('删除失败: ' + e.message);
+            showError('删除失败: ' + e.message);
             console.error('[Single] WS删除错误:', e);
         }
     }
@@ -105,7 +105,7 @@ async function downloadSong(songOrId, forceQuality = null, suppressAlerts = fals
     }
 
     if (!song) {
-        if (!suppressAlerts) alert('未找到歌曲信息');
+        if (!suppressAlerts) showError('未找到歌曲信息');
         return false;
     }
 
@@ -207,7 +207,7 @@ async function downloadSong(songOrId, forceQuality = null, suppressAlerts = fals
             return await downloadSong(song, nextQuality, suppressAlerts);
         }
 
-        if (!suppressAlerts) alert(`下载失败: ${e.message}\n(已尝试所有可用音质)`);
+        if (!suppressAlerts) showError(`下载失败: ${e.message}\n(已尝试所有可用音质)`);
         return false;
     }
 }
@@ -215,11 +215,11 @@ async function downloadSong(songOrId, forceQuality = null, suppressAlerts = fals
 // Batch download function
 async function batchDownloadFromList() {
     if (selectedItems.size === 0) {
-        alert('请先选择要下载的歌曲');
+        showError('请先选择要下载的歌曲');
         return;
     }
 
-    if (!confirm(`确定要批量下载 ${selectedItems.size} 首歌曲吗？\n(注意：浏览器可能会拦截多个文件的连续下载，请留意地址栏拦截提示)`)) {
+    if (!(await showSelect('批量下载', `确定要批量下载 ${selectedItems.size} 首歌曲吗？\n(注意：浏览器可能会拦截多个文件的连续下载，请留意地址栏拦截提示)`))) {
         return;
     }
 
@@ -262,7 +262,7 @@ async function batchDownloadFromList() {
     });
 
     if (songsToDownload.length === 0) {
-        alert('未找到选中歌曲的详细信息');
+        showError('未找到选中歌曲的详细信息');
         console.error('Songs to Download is empty. Selected IDs:', Array.from(selectedItems));
         console.log('Current Playlist:', currentPlaylist);
         return;

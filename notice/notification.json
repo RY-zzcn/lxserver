@@ -18,25 +18,25 @@
         }
     },
     {
-        "comment": "=== 版本更新 v1.5.5 ===",
-        "id": "update_v1_5_5",
+        "comment": "=== 版本更新 v1.6.0 ===",
+        "id": "update_v1_6_0",
         "status": "active",
         "type": "version",
         "logic": {
-            "target_version": "v1.5.5",
+            "target_version": "v1.6.0",
             "operator": "<",
             "interval_hours": 24
         },
         "ui": {
-            "title": "发现新版本 v1.5.5",
-            "date": "2026-02-23",
-            "message": "本次更新带来了以下变动：\n1. 📱 自动精简：手机端播放自动精简控制栏，优化小屏体验。\n2. 新增加歌词播放背景自定义。\n3. 🔧 UI 修复：修复优化了诸多手机/电脑播放页面 UI 问题。\n4. 🚀 播放修复：修复了过期缓存链接重新获取播放失败的问题。",
+            "title": "发现新版本 v1.6.0",
+            "date": "2026-02-26",
+            "message": "本次更新带来了以下变动：\n1. 🎶 歌单支持：增加了推荐歌单、排行榜及歌单搜索功能。\n2. 🔗 自定义导入：支持解析并导入网易云/QQ/酷狗等平台的外部歌单链接。\n3. 📋 播放队列：新增正在播放列表查看，支持队列跳转与管理。\n4. 🎨 界面优化：替换原生对话框为全新的拟物化自定义模态框。\n5. 🔧 播放增强：新增“失败自动下曲”逻辑，提升播放连贯性。",
             "confirm_text": "去查看",
             "cancel_text": "稍后提醒"
         },
         "action": {
             "type": "link",
-            "url": "https://github.com/XCQ0607/lxserver/releases/tag/v1.5.5"
+            "url": "https://github.com/XCQ0607/lxserver/releases/tag/v1.6.0"
         }
     }
 ]

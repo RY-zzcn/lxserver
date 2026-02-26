@@ -136,6 +136,7 @@ export default {
     // https://music.migu.cn/v5/#/playlist?playlistId=221573417
     if (/\/playlist[/?]/.test(id)) {
       id = /(?:playlistId|id)=(\d+)/.exec(id)?.[1]
+      // if (!id) id = /\/playlist\/(\d+)/.exec(id)?.[1]
       if (!id) throw new Error('list detail id parse failed')
     } else if (this.regExps.listDetailLink.test(id)) {
       id = id.replace(this.regExps.listDetailLink, '$1')

@@ -397,3 +397,53 @@ return {
   limit,
   maxPage: Math.ceil(total / limit) || 1,
 }
+```
+
+## 5. 咪咕音乐 (mg) - 歌单封面域名补全
+**文件路径**: `src/modules/utils/musicSdk/mg/musicInfo.js`
+**修改目的**: 修复歌单详情中歌曲封面为相对路径导致无法显示的问题。
+**修改代码**:
+```javascript
+// 修改前
+// img: item.img3 || item.img2 || item.img1 || null,
+
+// 修改后
+let img = item.img3 || item.img2 || item.img1 || null
+if (img && !/https?:/.test(img)) img = 'http://d.musicapp.migu.cn' + img
+// ...
+img,
+```
+
+## 6. 酷我音乐 (kw) - 歌单封面解析
+**文件路径**: `src/modules/utils/musicSdk/kw/songList.js`
+**修改目的**: 修复歌单详情中歌曲封面显示不出的问题。
+**修改方案**: 增加对 `pic` 和 `albumpic` 字段的解析，这些字段在歌单详情接口中更常见。
+**修改代码**:
+```javascript
+// 修改前
+// img: item.prob_albumpic || (item.web_albumpic_short ? `https://img4.kuwo.cn/star/albumcover/500${item.web_albumpic_short}` : null),
+
+// 修改后
+img: item.pic || item.albumpic || item.prob_albumpic || (item.web_albumpic_short ? `https://img4.kuwo.cn/star/albumcover/500${item.web_albumpic_short}` : null),
+```
+
+## 7. 酷狗音乐 (kg) - 歌单封面解析
+**文件路径**: `src/modules/utils/musicSdk/kg/songList.js`, `src/modules/utils/musicSdk/kg/musicInfo.js`
+**修改目的**: 修复歌单详情歌曲列表无封面（硬编码为 null）的问题。
+**核心修改**:
+1. 将接口从 `v2` 升级到 `v3` (`gateway.kugou.com/v3/album_audio/audio`)。
+2. 在 `fields` 请求参数中显式添加 `img,album_img` 字段。
+3. 在解析函数中优化封面抓取逻辑，增加对 `{size}` 占位符的批量替换处理。
+**修改代码**:
+```javascript
+// 请求字段增加 img,album_img，并升级 v3
+let url = 'http://gateway.kugou.com/v3/album_audio/audio'
+fields: 'album_info,author_name,audio_info,ori_audio_name,base,songname,classification,img,album_img'
+
+// filterData2 解析逻辑 (匹配 V3 接口返回的 sizable_cover 和 union_cover)
+img: (item.img || item.album_info?.sizable_cover || item.audio_info?.trans_param?.union_cover || item.album_info?.pic || item.album_info?.img || item.album_info?.s_img || '').replace('{size}', '400') || null
+```
+
+
+
+

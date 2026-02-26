@@ -6,7 +6,7 @@ import mg from './mg/index'
 import bd from './bd/index'
 import xm from './xm'
 import { supportQuality } from './api-source'
-export { dateFormat, dateFormat2, decodeName } from '../index'
+export { dateFormat, dateFormat2, decodeName, sizeFormate, formatPlayTime, formatPlayCount } from '../index'
 
 
 const sources = {

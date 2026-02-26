@@ -165,12 +165,12 @@ const musicVisualizer = (function () {
             }
 
             // 调整内容区域的间距以防被遮挡
-            const mainViews = document.querySelectorAll('#view-search, #view-favorites, #view-settings, #view-about, #view-player-detail');
+            const mainViews = document.querySelectorAll('#view-search, #view-favorites, #view-settings, #view-about, #view-player-detail, #view-songlist, #songlist-detail-view');
             mainViews.forEach(view => {
                 view.style.transition = 'padding-bottom 0.3s ease, padding-top 0.3s ease';
                 const isMobile = window.innerWidth < 768;
-                let pb = footerIsHidden ? '' : (isMobile ? '120px' : '180px');
-                if (!footerIsHidden && isShortWindow) pb = (isMobile ? '80px' : '120px');
+                let pb = footerIsHidden ? '' : (isMobile ? '180px' : '180px');
+                if (!footerIsHidden && isShortWindow) pb = (isMobile ? '120px' : '120px');
 
                 if (view.id === 'view-player-detail') {
                     // [Fix] 详情页特殊处理：使用容器 Margin 而不是视图 Padding，防止背景图层因 Padding 出现视觉断层（黑线）

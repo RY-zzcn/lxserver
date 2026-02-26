@@ -61,3 +61,9 @@ export const dateFormat2 = (time) => {
     }
 }
 
+
+export const formatPlayCount = (num) => {
+    if (num > 100000000) return parseInt(num / 10000000) / 10 + '亿'
+    if (num > 10000) return parseInt(num / 1000) / 10 + '万'
+    return num
+}

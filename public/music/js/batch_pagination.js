@@ -3,60 +3,90 @@
 function handleBatchSelect(songId, isChecked) {
     const id = String(songId); // Force string ID
     if (isChecked) {
-        selectedItems.add(id);
-        // Cache song object if available in currentPlaylist
-        if (currentPlaylist) {
-            // Loose comparison just in case, though currentPlaylist IDs should match render
-            const song = currentPlaylist.find(s => String(s.id) === id);
-            if (song) selectedSongObjects.set(id, song);
+        window.selectedItems.add(id);
+        // Cache song object if available in viewingPlaylist
+        if (typeof viewingPlaylist !== 'undefined' && viewingPlaylist) {
+            // Loose comparison just in case, though viewingPlaylist IDs should match render
+            const song = window.viewingPlaylist.find(s => String(s.id) === id);
+            if (song) window.selectedSongObjects.set(id, song);
         }
     } else {
-        selectedItems.delete(id);
-        selectedSongObjects.delete(id);
+        window.selectedItems.add(id);
+        window.selectedItems.delete(id);
+        window.selectedSongObjects.delete(id);
     }
     updateBatchToolbar();
 }
 
 function toggleBatchMode() {
-    batchMode = !batchMode;
-    selectedItems.clear();
-    selectedSongObjects.clear();
-    renderResults(currentPlaylist);
+    window.batchMode = !window.batchMode;
+    window.selectedItems.clear();
+    window.selectedSongObjects.clear();
+
+    // Check if song list detail is open
+    const slDetail = document.getElementById('songlist-detail-view');
+    if (slDetail && !slDetail.classList.contains('hidden')) {
+        if (window.SongListManager) window.SongListManager.renderDetail();
+    } else {
+        renderResults(window.viewingPlaylist);
+    }
+
     updateBatchToolbar();
 
     const toolbar = document.getElementById('batch-toolbar');
     if (toolbar) {
-        toolbar.classList.toggle('hidden', !batchMode);
+        toolbar.classList.toggle('hidden', !window.batchMode);
+    }
+
+    const slToolbar = document.getElementById('sl-batch-toolbar');
+    if (slToolbar) {
+        slToolbar.classList.toggle('hidden', !window.batchMode);
     }
 }
 
 function selectAllVisible() {
-    currentPlaylist.forEach(item => {
+    window.viewingPlaylist.forEach(item => {
         const id = String(item.id);
-        selectedItems.add(id);
-        selectedSongObjects.set(id, item);
+        window.selectedItems.add(id);
+        window.selectedSongObjects.set(id, item);
     });
-    renderResults(currentPlaylist);
+
+    const slDetail = document.getElementById('songlist-detail-view');
+    if (slDetail && !slDetail.classList.contains('hidden')) {
+        if (window.SongListManager) window.SongListManager.renderDetail();
+    } else {
+        renderResults(window.viewingPlaylist);
+    }
     updateBatchToolbar();
 }
 
 function deselectAll() {
-    selectedItems.clear();
-    selectedSongObjects.clear();
-    renderResults(currentPlaylist);
+    window.selectedItems.clear();
+    window.selectedSongObjects.clear();
+
+    const slDetail = document.getElementById('songlist-detail-view');
+    if (slDetail && !slDetail.classList.contains('hidden')) {
+        if (window.SongListManager) window.SongListManager.renderDetail();
+    } else {
+        renderResults(window.viewingPlaylist);
+    }
     updateBatchToolbar();
 }
 
 function updateBatchToolbar() {
     const countEl = document.getElementById('batch-selected-count');
     if (countEl) {
-        countEl.textContent = selectedItems.size;
+        countEl.textContent = window.selectedItems.size;
+    }
+    const slCountEl = document.getElementById('sl-batch-selected-count');
+    if (slCountEl) {
+        slCountEl.textContent = window.selectedItems.size;
     }
 
     const deleteBtn = document.getElementById('batch-delete-btn');
     if (deleteBtn) {
         // Hide delete button in network search mode
-        if (typeof currentSearchScope !== 'undefined' && currentSearchScope === 'network') {
+        if (window.currentSearchScope === 'network') {
             deleteBtn.classList.add('hidden');
         } else {
             deleteBtn.classList.remove('hidden');
@@ -65,23 +95,23 @@ function updateBatchToolbar() {
 }
 
 async function batchDeleteFromList() {
-    if (selectedItems.size === 0) {
-        alert('请先选择要删除的歌曲');
+    if (window.selectedItems.size === 0) {
+        showError('请先选择要删除的歌曲');
         return;
     }
 
-    if (!confirm(`确定要删除选中的 ${selectedItems.size} 首歌曲吗?`)) {
+    if (!(await showSelect('批量删除', `确定要删除选中的 ${window.selectedItems.size} 首歌曲吗?`, { danger: true }))) {
         return;
     }
 
     // Get current list context
     const activeListId = getCurrentActiveListId();
     if (!activeListId || !currentListData) {
-        alert('无法确定当前列表');
+        showError('无法确定当前列表');
         return;
     }
 
-    const idsToDelete = Array.from(selectedItems);
+    const idsToDelete = Array.from(window.selectedItems);
 
     if (window.SyncManager.mode === 'local') {
         // Local mode: Use user credentials to directly manipulate data
@@ -89,7 +119,7 @@ async function batchDeleteFromList() {
         const password = localStorage.getItem('lx_sync_pass');
 
         if (!username || !password) {
-            alert('请先登录本地账号');
+            showError('请先登录本地账号');
             return;
         }
 
@@ -127,7 +157,7 @@ async function batchDeleteFromList() {
             console.log('[Batch] 本地模式删除成功');
 
         } catch (e) {
-            alert('批量删除失败: ' + e.message);
+            showError('批量删除失败: ' + e.message);
             console.error('[Batch] 删除错误:', e);
         }
     } else if (window.SyncManager.mode === 'remote') {
@@ -162,21 +192,21 @@ async function batchDeleteFromList() {
             handleListClick(activeListId);
 
         } catch (e) {
-            alert('批量删除失败: ' + e.message);
+            showError('批量删除失败: ' + e.message);
             console.error('[Batch] WS删除错误:', e);
         }
     }
 
     // Clear selection and exit batch mode
-    selectedItems.clear();
-    batchMode = false;
+    window.selectedItems.clear();
+    window.batchMode = false;
     toggleBatchMode(); // Update UI
 }
 
 // Helper: Get current active list ID
 function getCurrentActiveListId() {
     // From UI context or currentSearchScope
-    if (currentSearchScope === 'local_list') {
+    if (window.currentSearchScope === 'local_list') {
         // Should track which list is being viewed
         return window.currentViewingListId || null;
     }
@@ -217,24 +247,41 @@ function updatePaginationInfo(start, end, total) {
 
 function goToPage(page) {
     currentPage = page;
-    renderResults(currentPlaylist);
+    renderResults(window.viewingPlaylist);
 }
 
-function nextPage() {
-    const totalItems = currentPlaylist.length;
+async function nextPage() {
+    const totalItems = window.viewingPlaylist ? window.viewingPlaylist.length : 0;
     const itemsPerPage = settings.itemsPerPage === 'all' ? totalItems : parseInt(settings.itemsPerPage);
-    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    const totalPages = Math.ceil((totalItems || 1) / (itemsPerPage || 1));
 
     if (currentPage < totalPages) {
         currentPage++;
-        renderResults(currentPlaylist);
+        renderResults(window.viewingPlaylist);
+    } else if (window.currentSearchScope === 'network') {
+        const btn = document.querySelector('button[onclick="nextPage()"]');
+        const oldHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 加载中...';
+            btn.disabled = true;
+        }
+
+        try {
+            const nextNetPage = (window.currentNetworkPage || 1) + 1;
+            await window.doSearch(nextNetPage, true);
+        } finally {
+            if (btn) {
+                btn.innerHTML = oldHtml;
+                btn.disabled = false;
+            }
+        }
     }
 }
 
 function prevPage() {
     if (currentPage > 1) {
         currentPage--;
-        renderResults(currentPlaylist);
+        renderResults(viewingPlaylist);
     }
 }
 
@@ -243,7 +290,7 @@ function changeItemsPerPage(value) {
     settings.itemsPerPage = value === 'all' ? 'all' : parseInt(value);
     localStorage.setItem('lx_settings', JSON.stringify(settings));
     currentPage = 1; // Reset to first page
-    renderResults(currentPlaylist);
+    renderResults(viewingPlaylist);
 }
 
 // Load settings from localStorage

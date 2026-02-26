@@ -90,71 +90,60 @@ const getMime = (filename: string) => {
  */
 const normalizeSongInfo = (songInfo: any) => {
   if (!songInfo) return songInfo
-  // 处理音质信息 (types / _types)
-  if (!songInfo.types && songInfo.meta) {
-    songInfo.types = songInfo.meta.qualitys || songInfo.meta.types
-  }
-  if (!songInfo._types && songInfo.meta) {
-    songInfo._types = songInfo.meta._qualitys || songInfo.meta._types
-  }
-  // 处理标题/专辑/封面等基础备用字段
-  if (!songInfo.albumName && songInfo.meta?.albumName) songInfo.albumName = songInfo.meta.albumName
-  if (!songInfo.img && songInfo.meta?.picUrl) songInfo.img = songInfo.meta.picUrl
+  const meta = songInfo.meta || {}
 
-  // 1. 处理通用 ID 转换 (id -> songmid)
-  // 收藏夹中的歌曲 id 通常带有前缀 (如 wy_123)，清洗为 SDK 内部通用的 songmid (123)
-  if (!songInfo.songmid && songInfo.id) {
-    const sourcePrefix = `${songInfo.source}_`
-    if (typeof songInfo.id === 'string' && songInfo.id.startsWith(sourcePrefix)) {
-      songInfo.songmid = songInfo.id.slice(sourcePrefix.length)
-    } else {
-      songInfo.songmid = songInfo.id
+  // 1. 处理音质信息 (types / _types)
+  if (!songInfo.types && meta) {
+    songInfo.types = meta.qualitys || meta.types
+  }
+  if (!songInfo._types && meta) {
+    songInfo._types = meta._qualitys || meta._types
+  }
+
+  // 2. 处理基础字段备用根节点映射
+  if (!songInfo.albumName && meta.albumName) songInfo.albumName = meta.albumName
+  if (!songInfo.albumId && meta.albumId) songInfo.albumId = meta.albumId
+  if (!songInfo.img && meta.picUrl) songInfo.img = meta.picUrl
+
+  // 3. 处理通用 ID 转换 (id -> songmid)
+  if (!songInfo.songmid) {
+    if (meta.songId) {
+      songInfo.songmid = meta.songId
+    } else if (songInfo.id) {
+      const sourcePrefix = `${songInfo.source}_`
+      if (typeof songInfo.id === 'string' && songInfo.id.startsWith(sourcePrefix)) {
+        songInfo.songmid = songInfo.id.slice(sourcePrefix.length)
+      } else {
+        songInfo.songmid = songInfo.id
+      }
     }
   }
 
-  // 2. 针对各平台 SDK 所需的特定字段进行“大补全”
-  // 目标：确保从“搜索结果”和“收藏列表”传入的信息字段完全对等
+  // 4. 针对各平台 SDK 所需的特定字段进行补全
   switch (songInfo.source) {
     case 'kg': // 酷狗
-      // 关键：hash (用于评论和链接获取)
-      if (!songInfo.hash) {
-        const mid = String(songInfo.songmid || '')
-        if (mid.includes('_')) {
-          songInfo.hash = mid.split('_')[1]
-        } else if (mid.length === 32) {
-          songInfo.hash = mid
-        }
-      }
+      if (!songInfo.hash && meta.hash) songInfo.hash = meta.hash
+      // 兼容某些 SDK 可能需要的 songmid 格式 (数字_哈希 或 仅哈Hash)
       break
 
     case 'tx': // 腾讯
-      // 关键：strMediaMid (获取链接), songId (数字 ID，用于评论)
-      if (!songInfo.strMediaMid && songInfo.meta?.strMediaMid) songInfo.strMediaMid = songInfo.meta.strMediaMid
-      if (!songInfo.albumMid && songInfo.meta?.albumMid) songInfo.albumMid = songInfo.meta.albumMid
-
-      // 只有当 meta 中的 songId 是纯数字时才回填，否则保持 undefined 触发 SDK 自动获取
-      const metaSongId = String(songInfo.meta?.songId || '')
+      if (!songInfo.strMediaMid && meta.strMediaMid) songInfo.strMediaMid = meta.strMediaMid
+      if (!songInfo.albumMid && meta.albumMid) songInfo.albumMid = meta.albumMid
+      // 只有当 meta 中的 songId 是纯数字时才回填至 root.songId，否则保持 undefined 触发 SDK 自动获取
+      const metaSongId = String(meta.songId || '')
       if (/^\d+$/.test(metaSongId)) {
         songInfo.songId = metaSongId
-      } else {
-        delete songInfo.songId
       }
       break
 
     case 'mg': // 咪咕
-      // 关键：copyrightId (用于获取链接), songId (用于评论)
-      if (!songInfo.copyrightId && songInfo.meta?.copyrightId) songInfo.copyrightId = songInfo.meta.copyrightId
+      if (!songInfo.copyrightId && meta.copyrightId) songInfo.copyrightId = meta.copyrightId
+      if (!songInfo.lrcUrl && meta.lrcUrl) songInfo.lrcUrl = meta.lrcUrl
       if (!songInfo.songId) songInfo.songId = songInfo.songmid
       break
 
-    case 'wy': // 网易
-      // 关键：songmid (即数字 ID)
-      // 已经在步骤 1 中通用处理
-      break
-
     case 'kw': // 酷我
-      // 关键：songmid (即数字 ID)
-      // 已在步骤 1 中通用处理
+      // 已在步骤 3 中通用处理
       break
   }
 
@@ -1765,6 +1754,96 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
           console.error('[HotSearch] Error:', err.message)
           res.writeHead(500, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({ error: err.message || '获取热搜失败' }))
+        }
+        return
+      }
+
+      // [新增] 歌单分类标签 API
+      if (pathname === '/api/music/songList/tags' && req.method === 'GET') {
+        const source = urlObj.searchParams.get('source') || 'wy'
+        try {
+          if (!musicSdk[source] || !musicSdk[source].songList) {
+            throw new Error(`Source ${source} does not support songList`)
+          }
+          const result = await musicSdk[source].songList.getTags()
+          const sortList = musicSdk[source].songList.sortList
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ...result, sortList }))
+        } catch (err: any) {
+          console.error(`[SongList Tags] Error:`, err)
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: err.message || '获取歌单标签失败' }))
+        }
+        return
+      }
+      // [新增] 歌单列表 API
+      if (pathname === '/api/music/songList/list' && req.method === 'GET') {
+        const source = urlObj.searchParams.get('source') || 'wy'
+        const tagId = urlObj.searchParams.get('tagId') || ''
+        const sortId = urlObj.searchParams.get('sortId') || 'hot'
+        const page = parseInt(urlObj.searchParams.get('page') || '1')
+        try {
+          if (!musicSdk[source] || !musicSdk[source].songList) {
+            throw new Error(`Source ${source} does not support songList`)
+          }
+          const result = await musicSdk[source].songList.getList(sortId, tagId, page)
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify(result))
+        } catch (err: any) {
+          console.error(`[SongList List] Error:`, err)
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: err.message || '获取歌单列表失败' }))
+        }
+        return
+      }
+      // [新增] 歌单详情 API
+      if (pathname === '/api/music/songList/detail' && req.method === 'GET') {
+        const source = urlObj.searchParams.get('source') || 'wy'
+        const id = urlObj.searchParams.get('id')
+        const page = parseInt(urlObj.searchParams.get('page') || '1')
+        if (!id) {
+          res.writeHead(400)
+          res.end('Missing id')
+          return
+        }
+        try {
+          if (!musicSdk[source] || !musicSdk[source].songList) {
+            throw new Error(`Source ${source} does not support songList`)
+          }
+          const result = await musicSdk[source].songList.getListDetail(id, page)
+          if (result && result.list) {
+            result.list = result.list.map(normalizeSongInfo)
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify(result))
+        } catch (err: any) {
+          console.error(`[SongList Detail] Error:`, err)
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: err.message || '获取歌单详情失败' }))
+        }
+        return
+      }
+      // [新增] 歌单搜索 API
+      if (pathname === '/api/music/songList/search' && req.method === 'GET') {
+        const source = urlObj.searchParams.get('source') || 'wy'
+        const text = urlObj.searchParams.get('text')
+        const page = parseInt(urlObj.searchParams.get('page') || '1')
+        if (!text) {
+          res.writeHead(400)
+          res.end('Missing text')
+          return
+        }
+        try {
+          if (!musicSdk[source] || !musicSdk[source].songList) {
+            throw new Error(`Source ${source} does not support songList`)
+          }
+          const result = await musicSdk[source].songList.search(text, page)
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify(result))
+        } catch (err: any) {
+          console.error(`[SongList Search] Error:`, err)
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: err.message || '搜索歌单失败' }))
         }
         return
       }

@@ -47,16 +47,16 @@ export default {
           },
           module: 'playlist.PlayListCategoryServer',
         },
-        }))}`
+      }))}`
     }
     return `https://u.y.qq.com/cgi-bin/musicu.fcg?loginUin=0&hostUin=0&format=json&inCharset=utf-8&outCharset=utf-8&notice=0&platform=wk_v15.json&needNewCode=0&data=${encodeURIComponent(JSON.stringify({
-          comm: { cv: 1602, ct: 20 },
-          playlist: {
-            method: 'get_playlist_by_tag',
-            param: { id: 10000000, sin: this.limit_list * (page - 1), size: this.limit_list, order: sortId, cur_page: page },
-            module: 'playlist.PlayListPlazaServer',
-          },
-      }))}`
+      comm: { cv: 1602, ct: 20 },
+      playlist: {
+        method: 'get_playlist_by_tag',
+        param: { id: 10000000, sin: this.limit_list * (page - 1), size: this.limit_list, order: sortId, cur_page: page },
+        module: 'playlist.PlayListPlazaServer',
+      },
+    }))}`
   },
   getListDetailUrl(id) {
     return `https://c.y.qq.com/qzone/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg?type=1&json=1&utf8=1&onlysong=0&new_format=1&disstid=${id}&loginUin=0&hostUin=0&format=json&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq.json&needNewCode=0`

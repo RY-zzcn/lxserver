@@ -435,7 +435,7 @@ export default {
         songmid: item.id,
         source: 'kw',
         interval: formatPlayTime(parseInt(item.duration)),
-        img: null,
+        img: item.pic || item.albumpic || item.prob_albumpic || (item.web_albumpic_short ? `https://img4.kuwo.cn/star/albumcover/500${item.web_albumpic_short}` : null),
         lrc: null,
         otherSource: null,
         types,

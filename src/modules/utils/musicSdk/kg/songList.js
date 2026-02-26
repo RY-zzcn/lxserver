@@ -292,7 +292,7 @@ export default {
       dfid: '-',
       clienttime: Date.now(),
       key: 'OIlwieks28dk2k092lksi2UIkp',
-      fields: 'album_info,author_name,audio_info,ori_audio_name,base,songname',
+      fields: 'album_info,author_name,audio_info,ori_audio_name,base,songname,classification,img,album_img',
     }
     let list = hashs
     let tasks = []
@@ -301,7 +301,7 @@ export default {
       if (list.length < 100) break
       list = list.slice(100)
     }
-    let url = 'http://gateway.kugou.com/v2/album_audio/audio'
+    let url = 'http://gateway.kugou.com/v3/album_audio/audio'
     return tasks.map(task => this.createHttp(url, {
       method: 'POST',
       body: task,
@@ -742,7 +742,7 @@ export default {
         songmid: item.audio_id,
         source: 'kg',
         interval: formatPlayTime(item.duration / 1000),
-        img: null,
+        img: (item.img || item.album_img || '').replace('{size}', '400') || null,
         lrc: null,
         hash: item.hash,
         types,
@@ -865,7 +865,7 @@ export default {
         songmid: item.audio_info.audio_id,
         source: 'kg',
         interval: formatPlayTime(parseInt(item.audio_info.timelength) / 1000),
-        img: null,
+        img: (item.img || item.album_info?.sizable_cover || item.audio_info?.trans_param?.union_cover || item.album_info?.pic || item.album_info?.img || item.album_info?.s_img || '').replace('{size}', '400') || null,
         lrc: null,
         hash: item.audio_info.hash,
         otherSource: null,
