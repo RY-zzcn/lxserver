@@ -85,6 +85,12 @@ body:
     validations:
       required: true
   - type: input
+    id: deploy_hash
+    attributes:
+      label: 部署版本Hash (Deploy Hash)
+      description: 可以从关于中查看 (Viewable in the About section)
+      placeholder: "例如: a1b2c3d"
+  - type: input
     id: env_version
     attributes:
       label: Node/Python版本 (如果适用)

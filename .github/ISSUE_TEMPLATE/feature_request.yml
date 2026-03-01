@@ -58,6 +58,12 @@ body:
     attributes:
       label: 你考虑过的替代方案 (Describe alternatives you've considered)
       description: 你现在是怎么解决这个问题的？例如：我现在是用另外一个软件转换格式，然后再导入进来。
+  - type: input
+    id: deploy_hash
+    attributes:
+      label: 部署版本Hash (Deploy Hash)
+      description: 可以从关于中查看 (Viewable in the About section)
+      placeholder: "例如: a1b2c3d"
   - type: textarea
     id: additional
     attributes:

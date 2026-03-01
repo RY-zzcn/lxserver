@@ -2194,11 +2194,11 @@
 
     <!-- Player Bar -->
     <footer id="player-footer"
-        class="fixed bottom-0 left-0 w-full h-auto md:h-24 py-2 md:py-0 t-bg-panel/90 backdrop-blur-lg border-t t-border-main shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] flex flex-col md:flex-row items-center px-4 md:px-6 z-50 transition-all duration-300">
+        class="fixed bottom-0 left-0 w-full h-auto md:min-h-[6rem] py-2 md:py-3 t-bg-panel/90 backdrop-blur-lg border-t t-border-main shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] flex flex-col md:flex-row items-center px-4 md:px-6 z-[60] transition-all duration-300">
 
         <!-- Song Info -->
         <div id="player-song-info"
-            class="w-full md:w-1/4 flex items-center gap-2 md:gap-4 mb-2 md:mb-0 pr-8 md:pr-0 transition-all duration-300">
+            class="w-full md:w-1/4 flex items-start md:items-center gap-2 md:gap-4 mb-2 md:mb-0 pr-8 md:pr-0 transition-all duration-300">
             <div
                 class="w-12 h-12 md:w-14 md:h-14 bg-gray-200 rounded-md overflow-hidden shadow-sm relative group flex-shrink-0">
                 <img id="player-cover" src="/music/assets/logo.svg" onerror="this.src='/music/assets/logo.svg'"
@@ -2222,10 +2222,17 @@
                 </div>
             </div>
             <!-- Action Buttons (Mobile Compact) -->
-            <div class="flex items-center gap-1.5 ml-auto md:ml-2">
+            <div
+                class="flex flex-wrap items-center justify-end max-[440px]:justify-center gap-1.5 ml-auto flex-shrink-0 max-[440px]:max-w-[80px] max-w-[200px] md:max-w-none">
                 <!-- Like button -->
                 <button id="player-like-btn" class="text-gray-300 hover:text-red-500 transition-colors">
                     <i class="fas fa-heart text-base md:text-lg"></i>
+                </button>
+                <!-- Sound Effects Button (Mobile) -->
+                <button
+                    class="md:hidden text-gray-500 hover:text-emerald-600 text-[10px] font-bold border border-gray-300 rounded px-1 py-0"
+                    onclick="window.soundEffects && window.soundEffects.toggle()" title="均衡器 & 音效">
+                    <i class="fas fa-sliders-h text-[10px]"></i>
                 </button>
                 <!-- Comment button (Mobile) -->
                 <button
@@ -2358,7 +2365,8 @@
         </div>
 
         <!-- Volume & Lyrics (Hidden on small mobile if needed, or simplified) -->
-        <div class="w-full md:w-1/4 hidden md:flex items-center justify-end gap-4 order-2 md:order-none mr-8">
+        <div
+            class="w-full md:w-1/4 hidden md:flex flex-wrap items-center justify-end gap-x-2 gap-y-2 lg:gap-4 order-2 md:order-none mr-8">
             <!-- Sound Effects Button -->
             <button id="btn-sound-effects"
                 class="text-gray-500 hover:text-emerald-600 text-sm font-bold border border-gray-300 rounded px-2 py-0.5 transition-colors"
@@ -3039,23 +3047,6 @@
         </div>
     </div>
 
-    <!-- Audio Element -->
-    <audio id="audio-player" crossorigin="anonymous"></audio>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
-    <script src="/music/js/NoSleep.min.js"></script>
-    <script src="/music/js/log_viewer.js"></script>
-    <script src="/music/js/lyric-utils.js"></script>
-    <script src="/music/js/lyric-parser.js"></script>
-    <script src="/music/js/quality.js"></script>
-    <script src="/music/js/user_sync.js"></script>
-    <script src="/music/js/batch_pagination.js"></script>
-    <script src="/music/js/single_song_ops.js"></script>
-    <script src="/music/js/theme_manager.js"></script>
-    <script src="/music/js/songlist_manager.js"></script>
-    <script src="/music/js/wave.js"></script>
-    <script src="/music/js/visualizer.js"></script>
-    <script src="/music/js/pwa.js"></script>
-    <script src="/music/js/lyric-card.js"></script>
     <!-- Sound Effects Modal -->
     <div id="sound-effects-modal"
         class="fixed inset-0 z-[60] hidden items-center justify-center p-4 md:p-6 transition-all duration-300">
@@ -3193,6 +3184,24 @@
         </div>
     </div>
 
+
+    <!-- Audio Element -->
+    <audio id="audio-player" crossorigin="anonymous"></audio>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+    <script src="/music/js/NoSleep.min.js"></script>
+    <script src="/music/js/log_viewer.js"></script>
+    <script src="/music/js/lyric-utils.js"></script>
+    <script src="/music/js/lyric-parser.js"></script>
+    <script src="/music/js/quality.js"></script>
+    <script src="/music/js/user_sync.js"></script>
+    <script src="/music/js/batch_pagination.js"></script>
+    <script src="/music/js/single_song_ops.js"></script>
+    <script src="/music/js/theme_manager.js"></script>
+    <script src="/music/js/songlist_manager.js"></script>
+    <script src="/music/js/wave.js"></script>
+    <script src="/music/js/visualizer.js"></script>
+    <script src="/music/js/pwa.js"></script>
+    <script src="/music/js/lyric-card.js"></script>
     <script src="/music/js/sound-effects.js"></script>
     <script src="/music/app.js"></script>
 </body>
