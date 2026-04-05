@@ -45,6 +45,17 @@ body:
       description: 你认为应该发生什么？例如：应该开始播放音乐，且封面图加载正常。
     validations:
       required: true
+  - type: textarea
+    id: deploy_method
+    attributes:
+      label: 部署方式(Docker/npm/打包客户端)
+      description: 填写你的部署方式
+  - type: input
+    id: deploy_hash
+    attributes:
+      label: 部署版本Hash (Deploy Hash)
+      description: 可以从关于中查看 (Viewable in the About section)
+      placeholder: "例如: a1b2c3d"
   - type: markdown
     attributes:
       value: |
@@ -84,12 +95,6 @@ body:
       placeholder: "例如: v1.2.0"
     validations:
       required: true
-  - type: input
-    id: deploy_hash
-    attributes:
-      label: 部署版本Hash (Deploy Hash)
-      description: 可以从关于中查看 (Viewable in the About section)
-      placeholder: "例如: a1b2c3d"
   - type: input
     id: env_version
     attributes:

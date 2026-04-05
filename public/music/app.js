@@ -97,10 +97,15 @@ const DEFAULT_SETTINGS = {
     enableLyricCache: true,
     enableSongUrlCache: true,
     enableLyricGlow: true, // 歌词荧光效果 (默认开启)
+    enablePersistentToken: false, // 启用持久化 Token 验证
     playerBackground: 'blur', // 播放页背景: 'blur', 'solid', 'dark'
     saveAccountSettingsToFile: true, // 同步账号设置到文件 (默认开启)
     autoUpdateNetworkList: false, // 自动更新网络歌单 (默认关闭)
     preferServerCache: true, // 优先播放缓存歌曲 (默认开启)
+    remoteSyncUrl: '', // 远程同步地址
+    remoteSyncCode: '', // 远程同步连接码
+    enableClientModeSync: false, // 客户端模式: 每次登陆本地账户都会模拟客户端向远程服务器发起同步请求
+    lastRemoteSyncMode: 'merge_remote_local', // 上次使用的远程同步模式
 };
 
 let settings = { ...DEFAULT_SETTINGS };
@@ -139,10 +144,27 @@ window.selectedSongObjects = new Map();
 let expandBtnTimeout = null; // 展开按钮淡化计时器
 let toggleLyricsBtnTimeout = null; // 歌词按钮淡化计时器
 
-// ===== 认证相关代码 (服务端 Cookie Session) =====
+// ===== 认证相关代码 (Player Cookie Session + User Token) =====
 let authEnabled = false;
-// authToken 保留用于 API 请求头 x-user-token（与播放器登录认证不同）
+// authToken 保留用于播放器登录 (player.password) 颁发的 session
 let authToken = sessionStorage.getItem('lx_player_auth');
+// 用户 Token：将明文密码传输改为 Token 验证
+let userToken = localStorage.getItem('lx_user_token');
+
+/**
+ * 生成用户 API 请求所需的认证 Headers。
+ * 优先使用 Token，若无 Token 则兼容旧的 x-user-password 方式。
+ */
+function getUserAuthHeaders() {
+    const username = currentListData?.username || localStorage.getItem('lx_sync_user') || '';
+    if (userToken) {
+        return { 'x-user-name': username, 'x-user-token': userToken };
+    }
+    // 兼容旧方式（自动登录流程会尝试获取 Token，此为局部调用后备）
+    const pass = localStorage.getItem('lx_sync_pass');
+    return username && pass ? { 'x-user-name': username, 'x-user-password': pass } : {};
+}
+window.getUserAuthHeaders = getUserAuthHeaders;
 
 // 页面加载时：检查是否开启认证，若开启则显示登出按钮
 (async () => {
@@ -165,12 +187,40 @@ let authToken = sessionStorage.getItem('lx_player_auth');
         if (typeof syncSettingsUI === 'function') syncSettingsUI();
         else if (typeof updateAdminUI === 'function') updateAdminUI();
 
+        // [新增] 有 Token 时验证其有效性
+        if (userToken) {
+            try {
+                const vRes = await fetch('/api/user/auth/verify', {
+                    headers: { 'x-user-token': userToken }
+                });
+                const vData = await vRes.json();
+                if (!vData.valid) {
+                    console.log('[Auth] 用户 Token 已过期，已清除。如需使用账户功能请重新登录。');
+                    localStorage.removeItem('lx_user_token');
+                    userToken = null;
+                }
+            } catch (e) {
+                console.warn('[Auth] Token 验证失败:', e);
+            }
+        }
+
         // [新增] 公开受限用户自动尝试从服务器拉取配置 (_open)
         if (config['user.enablePublicRestriction']) {
             console.log('[Auth] 检测到公开限制已开启，尝试拉取公共配置...');
             if (typeof fetchSettingsFromServer === 'function') {
                 await fetchSettingsFromServer();
             }
+        }
+
+        // [新增] 客户端模式自动连接远程同步 (仅在已登录到本地账户时触发，防止 _open 访客同步)
+        if (userToken && settings.enableClientModeSync && settings.remoteSyncUrl && settings.remoteSyncCode) {
+            console.info('[Sync] Client mode enabled, auto-connecting to remote server...');
+            // 降低延迟，只要认证完成后即可触发
+            setTimeout(() => {
+                if (typeof handleRemoteOverwriteConnect === 'function') {
+                    handleRemoteOverwriteConnect(true);
+                }
+            }, 500);
         }
 
     } catch (error) {
@@ -740,7 +790,10 @@ function renderQueue() {
                  onclick="playSongFromQueue(${index})">
                 
                 <div class="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 relative">
-                    <img src="${getImgUrl(song)}" onerror="this.src='/music/assets/logo.svg'" class="w-full h-full object-cover">
+                    <img src="${getImgUrl(song)}" 
+                         onerror="this.src='/music/assets/logo.svg'" 
+                         loading="lazy" fetchpriority="low"
+                         class="w-full h-full object-cover">
                     ${isActive ? '<div class="absolute inset-0 bg-emerald-500/20 flex items-center justify-center"><div class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></div></div>' : ''}
                 </div>
                 
@@ -986,7 +1039,7 @@ async function doSearch(page = 1, append = false) {
     try {
         const headers = {};
         if (typeof authToken !== 'undefined' && authToken) headers['x-user-token'] = authToken;
-        if (typeof currentListData !== 'undefined' && currentListData && currentListData.username) headers['x-user-name'] = currentListData.username;
+        Object.assign(headers, getUserAuthHeaders());
 
         let list = [];
         if (source === 'all') {
@@ -1092,7 +1145,8 @@ async function fetchHotSearch(source = 'mg') {
     }
 
     try {
-        const res = await fetch(`${API_BASE}/hotSearch?source=${source}`);
+        // [优化] 使用低优先级 fetch 获取热搜，避免阻塞主加载
+        const res = await fetch(`${API_BASE}/hotSearch?source=${source}`, { priority: 'low' });
         if (!res.ok) {
             throw new Error(`获取热搜失败: ${res.status}`);
         }
@@ -1427,6 +1481,7 @@ function renderResults(list) {
             <div class="col-span-8 sm:col-span-7 md:col-span-6 ${titleLgSpan} flex items-center overflow-hidden pr-2">
                 <div class="relative w-10 h-10 md:w-12 md:h-12 mr-3 md:mr-4 flex-shrink-0 group cursor-pointer">
                      <img data-src="${imgUrl}" src="/music/assets/logo.svg" 
+                          loading="lazy" fetchpriority="low"
                           class="lazy-image w-full h-full rounded-lg object-cover shadow-sm group-hover:shadow-md transition-all group-hover:scale-105 duration-300 dynamic-logo is-placeholder" 
                           alt="${item.name}"
                           onerror="this.src='/music/assets/logo.svg'; this.classList.add('is-placeholder');">
@@ -1763,12 +1818,8 @@ async function findOtherSourceMatch(song) {
 
     try {
         const query = `${song.name} ${song.singer}`;
-        const headers = {};
-        const authToken = sessionStorage.getItem('lx_player_auth');
-        if (authToken) headers['x-user-token'] = authToken;
-        if (typeof currentListData !== 'undefined' && currentListData && currentListData.username) {
-            headers['x-user-name'] = currentListData.username;
-        }
+        const headers = { 'Content-Type': 'application/json' };
+        Object.assign(headers, getUserAuthHeaders());
 
         showInfo('正在自动尝试换源匹配...');
 
@@ -1941,10 +1992,8 @@ async function fetchSongUrl(song, quality, isRetry = false, isSilent = false) {
     } catch (_) { }
 
     const headers = { 'Content-Type': 'application/json' };
-    if (typeof authToken !== 'undefined' && authToken) headers['x-user-token'] = authToken;
-    if (typeof currentListData !== 'undefined' && currentListData && currentListData.username) {
-        headers['x-user-name'] = currentListData.username;
-    }
+    // 携带认证信息 (Token 或密码)
+    Object.assign(headers, getUserAuthHeaders());
     headers['x-req-id'] = reqId;
 
     try {
@@ -2103,7 +2152,7 @@ async function checkServerCache(song, quality, exactQuality = false) {
         });
         if (exactQuality) params.append('exactQuality', '1');
         const headers = {};
-        if (username) headers['x-user-name'] = username;
+        Object.assign(headers, getUserAuthHeaders());
 
         const res = await fetch(`/api/music/cache/check?${params}`, { headers });
         if (res.ok) {
@@ -2179,6 +2228,71 @@ function updateAdminUI() {
     if (scopeTag) {
         scopeTag.classList.toggle('hidden', !isPublic);
     }
+
+    // [新增] 处于登录/同步状态时，将相关输入框和连接按钮变灰防止重复操作
+    const isLocalLoggedIn = !!userToken && !isPublic;
+    const isRemoteConnected = (window.SyncManager && window.SyncManager.mode === 'remote' && window.SyncManager.client?.isConnected) ||
+        (window.currentRemoteOverwriteClient && window.currentRemoteOverwriteClient.isConnected);
+
+    // 情况 A: 本地登录框 - 只要本地已登录，就禁用本地输入框和登录按钮 (必须要先退出登录才能换号)
+    const loginInputIds = ['sync-local-user', 'sync-local-pass'];
+    loginInputIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.disabled = isLocalLoggedIn;
+            if (isLocalLoggedIn) {
+                el.classList.add('opacity-40', 'cursor-not-allowed', 'grayscale-[0.5]');
+                el.parentElement?.classList.add('pointer-events-none');
+            } else {
+                el.classList.remove('opacity-40', 'cursor-not-allowed', 'grayscale-[0.5]');
+                el.parentElement?.classList.remove('pointer-events-none');
+            }
+        }
+    });
+
+    const localLoginBtn = document.querySelector('#sync-form-local button');
+    if (localLoginBtn) {
+        localLoginBtn.disabled = isLocalLoggedIn;
+        if (isLocalLoggedIn) localLoginBtn.classList.add('opacity-30', 'pointer-events-none', 'grayscale');
+        else localLoginBtn.classList.remove('opacity-30', 'pointer-events-none', 'grayscale');
+    }
+
+    // 情况 B: 远程同步输入框 (WS 地址等) 
+    // 只有在以下任一条件满足时禁用：
+    // 1. 正在连接远程或已连接远程 (防止冲突)
+    // 2. 本地已登录 且 开启了客户端模式 (因为此时会触发自动同步，禁止改地址)
+    const disableRemote = isRemoteConnected || (isLocalLoggedIn && settings.enableClientModeSync);
+    const remoteInputIds = [
+        'sync-remote-url', 'sync-remote-code',
+        'remote-overwrite-url', 'remote-overwrite-code'
+    ];
+    remoteInputIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.disabled = disableRemote;
+            if (disableRemote) {
+                el.classList.add('opacity-40', 'cursor-not-allowed', 'grayscale-[0.5]');
+                el.parentElement?.classList.add('pointer-events-none');
+            } else {
+                el.classList.remove('opacity-40', 'cursor-not-allowed', 'grayscale-[0.5]');
+                el.parentElement?.classList.remove('pointer-events-none');
+            }
+        }
+    });
+
+    const remoteActionButtons = [
+        document.querySelector('#sync-remote-step1 button'),
+        document.querySelector('#sync-remote-step2 button'),
+        document.querySelector('#remote-overwrite-step1 button'),
+        document.querySelector('button[onclick^="handleRemoteOverwriteConnect"]')
+    ];
+    remoteActionButtons.forEach(btn => {
+        if (btn) {
+            btn.disabled = disableRemote;
+            if (disableRemote) btn.classList.add('opacity-30', 'pointer-events-none', 'grayscale');
+            else btn.classList.remove('opacity-30', 'pointer-events-none', 'grayscale');
+        }
+    });
 }
 
 async function triggerServerCache(song, url, quality) {
@@ -2186,7 +2300,7 @@ async function triggerServerCache(song, url, quality) {
         console.log('[ServerCache] Triggering background download for:', song.name);
         const username = currentListData?.username || '';
         const headers = { 'Content-Type': 'application/json' };
-        if (username) headers['x-user-name'] = username;
+        Object.assign(headers, getUserAuthHeaders());
 
         // 添加管理员验证 Header (如果已登录)
         const adminPass = localStorage.getItem('lx_admin_password');
@@ -2201,17 +2315,27 @@ async function triggerServerCache(song, url, quality) {
     } catch (e) { console.error('[ServerCache] Trigger failed:', e); }
 }
 
-function updateServerCacheConfig(location) {
+async function updateServerCacheConfig(location) {
     const headers = { 'Content-Type': 'application/json' };
+    // 携带 Token（或兼容旧密码），让服务端正确识别身份
+    Object.assign(headers, getUserAuthHeaders());
     const adminPass = localStorage.getItem('lx_admin_password');
     if (adminPass) headers['x-frontend-auth'] = adminPass;
 
-    fetch('/api/music/cache/config', {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify({ location })
-    }).catch(e => console.error('[ServerCache] Config update failed:', e));
-    // 移除 UI 通知逻辑，因为此函数通常在初始化时静默运行
+    try {
+        const res = await fetch('/api/music/cache/config', {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify({ location })
+        });
+        if (!res.ok) {
+            console.warn('[ServerCache] Config update failed:', res.status);
+            // 失败时回滚 UI，使前后端保持一致
+            if (typeof syncSettingsUI === 'function') syncSettingsUI('serverCacheLocation', settings.serverCacheLocation);
+        }
+    } catch (e) {
+        console.error('[ServerCache] Config update failed:', e);
+    }
 }
 window.updateServerCacheConfig = updateServerCacheConfig; // Expose global
 
@@ -2376,9 +2500,8 @@ async function playSong(song, index, forceQuality = null, noPlay = false, isRetr
         if (settings.enableServerLyricCache !== false && currentRawLrc) {
             try {
                 const _lyricHeaders = { 'Content-Type': 'application/json' };
-                const _authToken = sessionStorage.getItem('lx_player_auth') || localStorage.getItem('lx_player_auth');
-                if (_authToken) _lyricHeaders['x-user-token'] = _authToken;
-                if (currentListData?.username) _lyricHeaders['x-user-name'] = currentListData.username;
+                Object.assign(_lyricHeaders, getUserAuthHeaders());
+                // x-user-token 现在由 getUserAuthHeaders 统一管理
                 fetch(`${API_BASE}/cache/lyric`, {
                     method: 'POST',
                     headers: _lyricHeaders,
@@ -3753,6 +3876,20 @@ const SETTINGS_UI_MAP = {
         type: 'checkbox',
         action: (v) => toggleNoSleep(v && !audio.paused)
     },
+    enablePersistentToken: {
+        id: 'setting-enable-persistent-token',
+        type: 'checkbox',
+        action: (v) => {
+            const container = document.getElementById('token-list-container');
+            if (container) {
+                if (v) {
+                    container.classList.remove('hidden', 'opacity-50', 'pointer-events-none');
+                } else {
+                    container.classList.add('hidden', 'opacity-50', 'pointer-events-none');
+                }
+            }
+        }
+    },
 
     // 显示 (Display)
     showSidebarSongInfo: {
@@ -3848,7 +3985,8 @@ const SETTINGS_UI_MAP = {
         type: 'value',
         action: () => document.getElementById('search-results-header')?.classList.contains('hidden') && showInitialSearchState()
     },
-    itemsPerPage: { id: 'items-per-page-select', type: 'value' }
+    itemsPerPage: { id: 'items-per-page-select', type: 'value' },
+    enableClientModeSync: { id: 'setting-client-mode-sync', type: 'checkbox' }
 };
 
 //缓存设置项
@@ -4037,7 +4175,7 @@ async function clearCache(type) {
         try {
             const username = (window.currentListData && window.currentListData.username) || localStorage.getItem('lx_sync_user') || '';
             const headers = {};
-            if (username) headers['x-user-name'] = username;
+            Object.assign(headers, getUserAuthHeaders());
 
             const res = await fetch('/api/music/cache/lyric/clear', { method: 'POST', headers });
             const data = await res.json();
@@ -4069,7 +4207,7 @@ async function updateServerCacheSize() {
 
         const username = (window.currentListData && window.currentListData.username) || localStorage.getItem('lx_sync_user') || '';
         const headers = {};
-        if (username) headers['x-user-name'] = username;
+        Object.assign(headers, getUserAuthHeaders());
         const response = await fetch('/api/music/cache/stats', { headers });
         if (!response.ok) {
             throw new Error('获取缓存统计失败');
@@ -4132,7 +4270,7 @@ async function refreshCacheList() {
     try {
         const username = (window.currentListData && window.currentListData.username) || localStorage.getItem('lx_sync_user') || '';
         const headers = {};
-        if (username) headers['x-user-name'] = username;
+        Object.assign(headers, getUserAuthHeaders());
 
         const res = await fetch('/api/music/cache/list', { headers });
         const data = await res.json();
@@ -4397,7 +4535,7 @@ async function removeCacheItem(filename) {
     try {
         const username = (window.currentListData && window.currentListData.username) || localStorage.getItem('lx_sync_user') || '';
         const headers = { 'Content-Type': 'application/json' };
-        if (username) headers['x-user-name'] = username;
+        Object.assign(headers, getUserAuthHeaders());
 
         const res = await fetch('/api/music/cache/remove', {
             method: 'POST',
@@ -4441,7 +4579,7 @@ async function batchDeleteCache() {
     try {
         const username = (window.currentListData && window.currentListData.username) || localStorage.getItem('lx_sync_user') || '';
         const headers = { 'Content-Type': 'application/json' };
-        if (username) headers['x-user-name'] = username;
+        Object.assign(headers, getUserAuthHeaders());
 
         const res = await fetch('/api/music/cache/remove', {
             method: 'POST',
@@ -4481,7 +4619,7 @@ async function clearServerCache() {
     try {
         const username = (window.currentListData && window.currentListData.username) || localStorage.getItem('lx_sync_user') || '';
         const headers = {};
-        if (username) headers['x-user-name'] = username;
+        Object.assign(headers, getUserAuthHeaders());
 
         const res = await fetch('/api/music/cache/clear', { method: 'POST', headers });
         if (res.ok) {
@@ -4665,8 +4803,7 @@ async function fetchLyric(song, quality = null) {
     // ===== 2. 尝试读取服务器端缓存歌词 =====
     const username = currentListData?.username || '';
     const headers = {};
-    if (typeof authToken !== 'undefined' && authToken) headers['x-user-token'] = authToken;
-    if (username) headers['x-user-name'] = username;
+    Object.assign(headers, getUserAuthHeaders());
 
     if (settings.enableServerLyricCache !== false) {
         try {
@@ -4716,7 +4853,8 @@ async function fetchLyric(song, quality = null) {
         });
 
         const url = `${API_BASE}/lyric?${params.toString()}`;
-        const res = await fetch(url, { headers });
+        // [优化] 使用低优先级 fetch 获取歌词，避免阻塞主进程加载和 PWA 安装按钮出现
+        const res = await fetch(url, { headers, priority: 'low' });
 
         if (!res.ok) {
             throw new Error(`Fetch lyric failed: ${res.status}`);
@@ -5399,30 +5537,28 @@ function switchSyncMode(mode) {
 }
 
 //同步设置
-async function pushSettingsToServer() {
-    if (!settings.saveAccountSettingsToFile) return;
+async function pushSettingsToServer(force = false) {
+    if (!force && !settings.saveAccountSettingsToFile) return;
     // Only local sync mode supports this for now
-    if (localStorage.getItem('lx_sync_mode') !== 'local' && !window.lx_config?.['user.enablePublicRestriction']) return;
+    if (localStorage.getItem('lx_sync_mode') !== 'local' && !window.lx_config?.['user.enablePublicRestriction'] && !force) return;
 
-    let user = localStorage.getItem('lx_sync_user');
-    let pass = localStorage.getItem('lx_sync_pass');
-
-    // 如果是公开限制模式，且没有设置账号，使用默认值
-    if (!user && window.lx_config?.['user.enablePublicRestriction']) {
-        user = 'default';
-        pass = 'default';
-    }
-
-    if (!user || !pass) return;
+    const user = localStorage.getItem('lx_sync_user');
+    const isPublicMode = !user && window.lx_config?.['user.enablePublicRestriction'];
+    if (!user && !isPublicMode && !force) return;
 
     try {
-        const headers = {
-            'Content-Type': 'application/json',
-            'x-user-name': user,
-            'x-user-password': pass
-        };
-        const adminPass = localStorage.getItem('lx_admin_password');
-        if (adminPass) headers['x-frontend-auth'] = adminPass;
+        const headers = { 'Content-Type': 'application/json' };
+        if (isPublicMode) {
+            // 公开受限用户：不需账号认证，但需要管理员密码
+            headers['x-user-name'] = 'default';
+            const adminPass = localStorage.getItem('lx_admin_password');
+            if (adminPass) headers['x-frontend-auth'] = adminPass;
+        } else {
+            // 已登录用户：使用 Token（或兼容旧密码）
+            Object.assign(headers, getUserAuthHeaders());
+            const adminPass = localStorage.getItem('lx_admin_password');
+            if (adminPass) headers['x-frontend-auth'] = adminPass;
+        }
 
         const res = await fetch('/api/user/settings', {
             method: 'POST',
@@ -5439,34 +5575,70 @@ async function pushSettingsToServer() {
         }
     } catch (e) {
         console.error('[Settings] 同步到服务器失败:', e);
+        if (force) throw e;
+    }
+}
+
+async function manualSaveSettings(btn) {
+    const originalText = btn.innerHTML;
+    try {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> 正在处理...';
+
+        // 1. Sync to localStorage
+        localStorage.setItem('lx_settings', JSON.stringify(settings));
+
+        // 2. Force push to server (settings.json)
+        await pushSettingsToServer(true);
+
+        btn.innerHTML = '<i class="fas fa-check mr-2"></i> 保存成功 (已同步到服务器)';
+        btn.classList.add('bg-emerald-50', 'dark:bg-emerald-500/10', 'text-emerald-600', 'dark:text-emerald-400', 'border-emerald-200');
+        btn.classList.remove('bg-blue-50', 'dark:bg-blue-500/10', 'text-blue-600', 'dark:text-blue-400', 'border-blue-100');
+
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+            btn.classList.remove('bg-emerald-50', 'dark:bg-emerald-500/10', 'text-emerald-600', 'dark:text-emerald-400', 'border-emerald-200');
+            btn.classList.add('bg-blue-50', 'dark:bg-blue-500/10', 'text-blue-600', 'dark:text-blue-400', 'border-blue-100');
+            btn.disabled = false;
+        }, 2000);
+        showSuccess('配置已成功保存并同步至服务器');
+    } catch (e) {
+        console.error('[Settings] 手动保存失败:', e);
+        btn.innerHTML = '<i class="fas fa-times mr-2"></i> 保存失败';
+        btn.classList.add('text-red-500', 'border-red-200');
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+            btn.classList.remove('text-red-500', 'border-red-200');
+            btn.disabled = false;
+        }, 2000);
+        showError('同步失败，请检查网络或登录状态');
     }
 }
 
 async function fetchSettingsFromServer() {
     if (!settings.saveAccountSettingsToFile) return;
-    let user = localStorage.getItem('lx_sync_user');
-    let pass = localStorage.getItem('lx_sync_pass');
 
-    // 如果是公开限制模式，且没有设置账号，使用默认值
-    if (!user && window.lx_config?.['user.enablePublicRestriction']) {
-        user = 'default';
-        pass = 'default';
-    }
-
-    if (!user || !pass) return;
+    const user = localStorage.getItem('lx_sync_user');
+    const isPublicMode = !user && window.lx_config?.['user.enablePublicRestriction'];
+    if (!user && !isPublicMode) return;
 
     try {
         console.log('[Settings] 正在从服务器尝试加载设置...');
-        const headers = {
-            'x-user-name': user,
-            'x-user-password': pass
-        };
-        const adminPass = localStorage.getItem('lx_admin_password');
-        if (adminPass) headers['x-frontend-auth'] = adminPass;
+        const headers = {};
+        if (isPublicMode) {
+            headers['x-user-name'] = 'default';
+            const adminPass = localStorage.getItem('lx_admin_password');
+            if (adminPass) headers['x-frontend-auth'] = adminPass;
+        } else {
+            Object.assign(headers, getUserAuthHeaders());
+            const adminPass = localStorage.getItem('lx_admin_password');
+            if (adminPass) headers['x-frontend-auth'] = adminPass;
+        }
 
         const res = await fetch('/api/user/settings', {
             headers: headers
         });
+
         if (res.ok) {
             const serverSettings = await res.json();
             console.log('[Settings] 从服务器加载设置成功:', serverSettings);
@@ -5502,12 +5674,32 @@ function updateSyncStatus(html, showLogout = true) {
     // Show logout button if requested AND we have active data or connection
     const hasActiveLogin = currentListData || (syncManager && syncManager.client && syncManager.client.isConnected);
     if (showLogout && hasActiveLogin) {
-        fullHtml += ` <button onclick="handleSyncLogout()" class="ml-2 text-red-500 hover:text-red-600 text-[10px] md:text-xs font-bold px-2 py-0.5 rounded border border-red-200 hover:bg-red-300/10 transition-all">退出登录 (Logout)</button>`;
+        fullHtml += ` <button onclick="handleSyncLogout()" class="ml-2 text-red-500 hover:text-red-600 text-[10px] md:text-xs font-bold px-2 py-0.5 rounded border border-red-200 hover:bg-red-300/10 transition-all inline-flex items-center gap-1" title="退出登录"><i class="fas fa-sign-out-alt"></i><span class="hidden sm:inline">退出登录</span></button>`;
+
+        // Add "Sync from Remote" button if in LOCAL mode
+        if (localStorage.getItem('lx_sync_mode') === 'local') {
+            const username = localStorage.getItem('lx_sync_user') || '该用户';
+            fullHtml += ` <button onclick="showRemoteOverwriteModal('${username}')" class="ml-2 text-emerald-500 hover:text-emerald-600 text-[10px] md:text-xs font-bold px-2 py-0.5 rounded border border-emerald-200 hover:bg-emerald-300/10 transition-all inline-flex items-center gap-1" title="连接远程服务器"><i class="fas fa-satellite-dish"></i><span class="hidden sm:inline">连接远程服务器</span></button>`;
+        }
     }
     statusEl.innerHTML = fullHtml;
+    // [新增] 状态变化后刷新登录界面禁用状态
+    if (typeof updateAdminUI === 'function') updateAdminUI();
 }
 
 async function handleSyncLogout() {
+    // [新增] 造访调用服务端注销 Token
+    if (userToken) {
+        try {
+            await fetch('/api/user/logout', {
+                method: 'POST',
+                headers: { 'x-user-token': userToken }
+            });
+        } catch (e) { console.warn('[Auth] Token 注销失败:', e); }
+        localStorage.removeItem('lx_user_token');
+        userToken = null;
+    }
+
     if (syncManager && syncManager.client && typeof syncManager.client.close === 'function') {
         syncManager.client.close();
     }
@@ -5560,6 +5752,37 @@ async function handleLocalLogin() {
 
         if (success) {
             statusEl.innerHTML = '<i class="fas fa-check-circle text-emerald-500"></i> 登录成功，正在同步...';
+
+            // [核心优化] 如果已有有效 Token，则不用再请求 /api/user/login 获取新 Token
+            if (userToken) {
+                console.log('[Auth] 检测到现有的 User Token，跳过登录接口直接尝试数据同步。');
+            } else {
+                try {
+                    const tokenRes = await fetch('/api/user/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username: user, password: pass })
+                    });
+                    if (tokenRes.ok) {
+                        const tokenData = await tokenRes.json();
+                        if (tokenData.token) {
+                            userToken = tokenData.token;
+                            localStorage.setItem('lx_user_token', userToken);
+                            console.log('[Auth] 新用户 Token 已获取并保存');
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[Auth] Token 获取失败，回退到旧式认证方式:', e);
+                }
+            }
+
+            // [新增] 显示并加载 Token 管理面板
+            const tokenSection = document.getElementById('token-management-section');
+            if (tokenSection) {
+                tokenSection.classList.remove('hidden');
+                loadTokenConfig();
+            }
+
             // Fetch List
             const listData = await syncManager.sync();
             currentListData = listData;
@@ -5578,6 +5801,14 @@ async function handleLocalLogin() {
             // [New] Fetch settings from server if enabled
             if (settings.saveAccountSettingsToFile) {
                 fetchSettingsFromServer();
+            }
+
+            // [新增] 客户端模式：登录本地服务器后自动触发远程同步
+            if (settings.enableClientModeSync && settings.remoteSyncUrl && settings.remoteSyncCode) {
+                console.info('[Sync] Client mode auto-triggering remote sync after local login...');
+                setTimeout(() => {
+                    handleRemoteOverwriteConnect(true);
+                }, 1000);
             }
         } else {
             statusEl.innerHTML = '<i class="fas fa-times-circle text-red-500"></i> 登录失败: 用户名或密码错误';
@@ -5616,17 +5847,7 @@ function selectSyncMode(mode) {
         mode += '_full';
     }
 
-    // 反转客户端的视角到服务端视角
-    const TRANS_MODE = {
-        merge_local_remote: 'merge_remote_local',
-        merge_remote_local: 'merge_local_remote',
-        overwrite_local_remote: 'overwrite_remote_local',
-        overwrite_remote_local: 'overwrite_local_remote',
-        overwrite_local_remote_full: 'overwrite_remote_local_full',
-        overwrite_remote_local_full: 'overwrite_local_remote_full',
-        cancel: 'cancel',
-    };
-    const translatedMode = TRANS_MODE[mode] || mode;
+    const translatedMode = mode;
 
     if (syncModeResolve) {
         syncModeResolve(translatedMode);
@@ -5749,6 +5970,233 @@ function handleRemoteConnect() {
         statusEl.innerHTML = `<i class="fas fa-exclamation-circle text-red-500"></i> 错误: ${e.message}`;
     }
 }
+
+// --- Remote Overwrite Modal Logic ---
+
+let currentRemoteOverwriteClient = null;
+
+function switchRemoteModalStep(stepId) {
+    const steps = ['remote-overwrite-step1', 'remote-overwrite-mode-selection', 'remote-overwrite-step2', 'remote-overwrite-result'];
+    steps.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            if (id === stepId) el.classList.remove('hidden');
+            else el.classList.add('hidden');
+        }
+    });
+}
+
+function showRemoteOverwriteModal(username) {
+    const modal = document.getElementById('modal-remote-overwrite');
+    const content = document.getElementById('modal-remote-overwrite-content');
+    if (!modal) return;
+
+    // Reset state and cleanup previous client if any
+    if (currentRemoteOverwriteClient) {
+        currentRemoteOverwriteClient.close();
+        currentRemoteOverwriteClient = null;
+    }
+
+    switchRemoteModalStep('remote-overwrite-step1');
+    document.getElementById('remote-overwrite-status').innerHTML = '';
+    remoteSyncModeResolve = null;
+    lastSelectedRemoteSyncMode = null;
+
+    // Pre-fill from settings
+    const urlInput = document.getElementById('remote-overwrite-url');
+    const codeInput = document.getElementById('remote-overwrite-code');
+    if (urlInput && settings.remoteSyncUrl) urlInput.value = settings.remoteSyncUrl;
+    else if (urlInput) {
+        const savedUrl = localStorage.getItem('lx_sync_url');
+        if (savedUrl) urlInput.value = savedUrl;
+    }
+    if (codeInput && settings.remoteSyncCode) codeInput.value = settings.remoteSyncCode;
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    setTimeout(() => {
+        content.classList.remove('scale-95', 'opacity-0');
+    }, 10);
+}
+
+function closeRemoteOverwriteModal(refresh = false) {
+    const modal = document.getElementById('modal-remote-overwrite');
+    const content = document.getElementById('modal-remote-overwrite-content');
+    if (!modal) return;
+
+    if (currentRemoteOverwriteClient) {
+        currentRemoteOverwriteClient.close();
+        currentRemoteOverwriteClient = null;
+    }
+
+    content.classList.add('scale-95', 'opacity-0');
+    setTimeout(() => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }, 300);
+}
+
+let remoteSyncModeResolve = null;
+let lastSelectedRemoteSyncMode = null;
+
+function selectRemoteOverwriteMode(mode) {
+    if (remoteSyncModeResolve) {
+        lastSelectedRemoteSyncMode = mode;
+        // 保存上次选择的同步模式到设置中，以便客户端模式自动使用
+        if (settings.lastRemoteSyncMode !== mode) {
+            updateSetting('lastRemoteSyncMode', mode);
+        }
+        remoteSyncModeResolve(mode);
+        remoteSyncModeResolve = null;
+    }
+}
+
+async function handleRemoteOverwriteConnect(silent = false) {
+    let url = settings.remoteSyncUrl || '';
+    let code = settings.remoteSyncCode || '';
+
+    // If not silent or inputs are accessible, try to get from DOM
+    const urlInput = document.getElementById('remote-overwrite-url');
+    const codeInput = document.getElementById('remote-overwrite-code');
+    if (urlInput && urlInput.value.trim()) url = urlInput.value.trim();
+    if (codeInput && codeInput.value.trim()) code = codeInput.value.trim();
+
+    const statusEl = document.getElementById('remote-overwrite-status');
+
+    if (!url || !code) {
+        if (!silent && statusEl) statusEl.innerText = '请输入完整的连接信息';
+        return;
+    }
+
+    if (!silent && statusEl) {
+        statusEl.innerHTML = '<i class="fas fa-spinner fa-spin text-emerald-500"></i> 正在建立安全连接...';
+    }
+
+    if (currentRemoteOverwriteClient) currentRemoteOverwriteClient.close();
+    currentRemoteOverwriteClient = new RemoteClient(url, code);
+    const tempRemoteClient = currentRemoteOverwriteClient;
+
+    tempRemoteClient.listHandlers = {
+        getData: async () => {
+            return currentListData || { defaultList: [], loveList: [], userList: [] };
+        },
+        setData: async (data) => {
+            console.log('[RemoteOverwrite] 收到远程数据，准备覆盖本地...');
+            try {
+                // 1. Update UI and global memory (Preserve username)
+                const oldUsername = currentListData ? currentListData.username : localStorage.getItem('lx_sync_user');
+                currentListData = data;
+                if (oldUsername) currentListData.username = oldUsername;
+
+                localStorage.setItem('lx_list_data', JSON.stringify(data));
+                renderMyLists(data);
+
+                // 2. Push to local server (important!)
+                if (syncManager && syncManager.mode === 'local') {
+                    await syncManager.push(data);
+                    console.log('[RemoteOverwrite] 已推送到本地服务器');
+                }
+            } catch (err) {
+                console.error('[RemoteOverwrite] 覆盖应用失败:', err);
+            }
+        },
+        getSyncMode: async () => {
+            console.log('[RemoteOverwrite] Server requested sync mode');
+            // 如果开启了客户端模式且有上次选择的模式，则自动选择
+            if (settings.enableClientModeSync && settings.lastRemoteSyncMode) {
+                console.log('[RemoteOverwrite] Client mode: auto-selecting mode:', settings.lastRemoteSyncMode);
+                lastSelectedRemoteSyncMode = settings.lastRemoteSyncMode;
+                return settings.lastRemoteSyncMode;
+            }
+
+            return new Promise((resolve) => {
+                remoteSyncModeResolve = resolve;
+                // If silent and no mode saved, we might have to show the modal anyway
+                switchRemoteModalStep('remote-overwrite-mode-selection');
+                if (silent) {
+                    // Force show modal if it's hidden during silent sync but needs interaction
+                    const modal = document.getElementById('modal-remote-overwrite');
+                    if (modal && modal.classList.contains('hidden')) {
+                        showRemoteOverwriteModal();
+                    }
+                }
+            });
+        }
+    };
+
+    tempRemoteClient.onLogin = (success, msg) => {
+        if (success) {
+            // Save address and code to settings and sync to server
+            settings.remoteSyncUrl = url;
+            settings.remoteSyncCode = code;
+            localStorage.setItem('lx_settings', JSON.stringify(settings));
+            if (settings.saveAccountSettingsToFile) {
+                pushSettingsToServer();
+            }
+            if (!silent && statusEl) {
+                statusEl.innerHTML = '<i class="fas fa-check-circle text-emerald-500"></i> 已连通，等待同步指令...';
+            }
+        } else {
+            if (!silent && statusEl) {
+                statusEl.classList.remove('t-text-muted');
+                statusEl.classList.add('text-red-500');
+                statusEl.innerText = '连接失败: ' + (msg || '未知错误');
+            } else if (silent) {
+                console.warn('[Sync] Silent connect failed:', msg);
+            }
+        }
+    };
+
+    tempRemoteClient.onSync = (status) => {
+        if (status === 'finished') {
+            if (!silent) {
+                switchRemoteModalStep('remote-overwrite-result');
+            } else {
+                console.info('[Sync] Silent sync finished.');
+                if (window.showInfo) showInfo('远程同步成功');
+            }
+            tempRemoteClient.close();
+            currentRemoteOverwriteClient = null;
+
+            // Updated result text logic below...
+            const titleEl = document.getElementById('remote-overwrite-result-title');
+            const textEl = document.getElementById('remote-overwrite-result-text');
+            const username = localStorage.getItem('lx_sync_user') || '该用户';
+
+            if (lastSelectedRemoteSyncMode === 'overwrite_local_remote_full') {
+                if (titleEl) titleEl.innerText = '推送同步成功！';
+                if (textEl) textEl.innerText = '当前本地账户歌单已成功覆盖至远程服务器。';
+            } else if (lastSelectedRemoteSyncMode === 'merge_local_remote') {
+                if (titleEl) titleEl.innerText = '合并同步成功！';
+                if (textEl) textEl.innerText = '当前本地账户歌单已成功合并至远程服务器。';
+            } else if (lastSelectedRemoteSyncMode === 'overwrite_remote_local_full') {
+                if (titleEl) titleEl.innerText = '拉取覆盖成功！';
+                if (textEl) textEl.innerText = '远程服务器歌单已成功覆盖至当前本地账户。';
+            } else if (lastSelectedRemoteSyncMode === 'merge_remote_local') {
+                if (titleEl) titleEl.innerText = '拉取合并成功！';
+                if (textEl) textEl.innerText = '远程服务器歌单已成功合并至当前本地账户。';
+            } else {
+                if (titleEl) titleEl.innerText = '连接成功';
+                if (textEl) textEl.innerText = '远程服务器已连接，当前数据内容与本地完全一致。';
+            }
+
+            // Update the status on the main settings page too
+            updateSyncStatus(`<i class="fas fa-check-circle text-emerald-500"></i> 远程同步任务已完成 (${username})`);
+        } else if (status === 'started' || status === 'syncing') {
+            if (!silent) {
+                switchRemoteModalStep('remote-overwrite-step2');
+            }
+        }
+    };
+
+    try {
+        await tempRemoteClient.connect();
+    } catch (err) {
+        if (!silent && statusEl) statusEl.innerText = '初始化失败: ' + err.message;
+        else console.error('[Sync] Silent connect failed:', err);
+    }
+}
+
 
 function renderMyLists(data) {
     const container = document.getElementById('my-lists-container');
@@ -6277,7 +6725,7 @@ async function handleRemoveList(listId, event) {
 }
 
 // Auto-restore on page load
-window.addEventListener('load', () => {
+document.addEventListener('DOMContentLoaded', () => {
     // 0. Load settings first
     loadSettings();
 
@@ -7642,6 +8090,7 @@ function createCommentItemHTML(comment, isReply = false) {
     return `
         <div class="group flex gap-3 md:gap-4 transition-all animate-fade-in-up">
             <img src="${avatar}" 
+                 loading="lazy" fetchpriority="low"
                  class="${avatarClass}" 
                  onerror="if(!this.dataset.tried){this.dataset.tried=1;this.src='/music/assets/logo.svg';this.classList.add('dynamic-logo','is-placeholder','p-1.5','bg-emerald-50');this.style.filter='var(--logo-filter, none)';}">
             <div class="flex-1 min-w-0">
@@ -7656,7 +8105,9 @@ function createCommentItemHTML(comment, isReply = false) {
                 ${comment.images && comment.images.length > 0 ? `
                     <div class="mt-2 flex flex-wrap gap-2">
                         ${comment.images.map(img => `
-                            <img src="${img}" class="max-w-[200px] max-h-[300px] rounded-lg shadow-sm cursor-pointer hover:opacity-90 transition-opacity" 
+                            <img src="${img}" 
+                                 loading="lazy" fetchpriority="low"
+                                 class="max-w-[200px] max-h-[300px] rounded-lg shadow-sm cursor-pointer hover:opacity-90 transition-opacity" 
                                  onclick="window.open('${img}', '_blank')"
                                  onerror="this.style.display='none'">
                         `).join('')}
@@ -8304,10 +8755,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 预加载自定义源数据，确保设置界面和模态框打开时有数据
     loadCustomSources();
 
-    // 默认在搜索界面，直接显示热搜
-    if (typeof showInitialSearchState === 'function') {
-        showInitialSearchState();
-    }
+    // [优化] 此处不再立即调用 showInitialSearchState()，移至下方的 setTimeout 中
 
     // [Fix] Listen to scroll event for real-time highlighting
     const lyricContainer = document.getElementById('lyric-container');
@@ -8340,49 +8788,72 @@ document.addEventListener('DOMContentLoaded', () => {
         qualitySelect.value = settings.preferredQuality;
     }
 
-    // 恢复其他设置
-    loadSettings();
-    restorePlaybackState();
+    // [优化] 延迟执行非关键初始化逻辑（设置恢复、状态重置、自动登录等）
+    // 允许浏览器先完成主要的渲染和 load 事件，释放 PWA 安装按钮并显示刷新图标
+    setTimeout(() => {
+        console.log('[Init] 启动后台初始化任务...');
+        loadSettings();
+        restorePlaybackState();
 
-    // 监听源切换，自动刷新热搜
-    const searchSourceSelect = document.getElementById('search-source');
-    if (searchSourceSelect) {
-        searchSourceSelect.addEventListener('change', () => {
-            const searchInput = document.getElementById('search-input');
-            // 仅当搜索框为空（即处于显示热搜状态）时刷新
-            if (!searchInput || !searchInput.value.trim()) {
-                showInitialSearchState();
+        // [新增] 延迟显示热搜，避免启动请求堆积
+        if (typeof showInitialSearchState === 'function') {
+            showInitialSearchState();
+        }
+
+        // 监听源切换，自动刷新热搜
+        const searchSourceSelect = document.getElementById('search-source');
+        if (searchSourceSelect) {
+            searchSourceSelect.addEventListener('change', () => {
+                const searchInput = document.getElementById('search-input');
+                // 仅当搜索框为空（即处于显示热搜状态）时刷新
+                if (!searchInput || !searchInput.value.trim()) {
+                    showInitialSearchState();
+                }
+            });
+        }
+
+        // [Fix] Auto-Login logic (Restore Session)
+        const savedMode = localStorage.getItem('lx_sync_mode');
+        if (savedMode === 'local') {
+            const u = localStorage.getItem('lx_sync_user');
+            const p = localStorage.getItem('lx_sync_pass');
+            if (u && p) {
+                // [优化] 如果已经有有效的 Token，不再重复登录
+                if (userToken) {
+                    console.log('[AutoLogin] 检测到有效 Token，跳过自动登录流程并直接恢复会话。');
+                    return;
+                }
+
+                console.log('[AutoLogin] 检测到本地账户且无有效 Token，正在自动登录...');
+                // Fill UI
+                const uInput = document.getElementById('sync-local-user');
+                const pInput = document.getElementById('sync-local-pass');
+                if (uInput) uInput.value = u;
+                if (pInput) pInput.value = p;
+                // Trigger login
+                handleLocalLogin();
             }
-        });
-    }
+        } else if (savedMode === 'remote') {
+            const url = localStorage.getItem('lx_sync_url');
+            const code = localStorage.getItem('lx_sync_code');
+            if (url && code) {
+                console.log('[AutoLogin] 检测到远程同步设置，正在自动连接...');
+                // Fill UI
+                const remoteUrlInput = document.getElementById('sync-remote-url');
+                const remoteStep1 = document.getElementById('sync-remote-step1');
+                const remoteStep2 = document.getElementById('sync-remote-step2');
+                const remoteCodeInput = document.getElementById('sync-remote-code');
 
-    // [Fix] Auto-Login logic (Restore Session)
-    const savedMode = localStorage.getItem('lx_sync_mode');
-    if (savedMode === 'local') {
-        const u = localStorage.getItem('lx_sync_user');
-        const p = localStorage.getItem('lx_sync_pass');
-        if (u && p) {
-            console.log('[AutoLogin] 检测到本地账户，正在自动登录...');
-            // Fill UI
-            document.getElementById('sync-local-user').value = u;
-            document.getElementById('sync-local-pass').value = p;
-            // Trigger login
-            handleLocalLogin();
+                if (remoteUrlInput) remoteUrlInput.value = url;
+                if (remoteStep1) remoteStep1.classList.add('hidden');
+                if (remoteStep2) remoteStep2.classList.remove('hidden');
+                if (remoteCodeInput) remoteCodeInput.value = code;
+
+                // Trigger connect
+                handleRemoteConnect();
+            }
         }
-    } else if (savedMode === 'remote') {
-        const url = localStorage.getItem('lx_sync_url');
-        const code = localStorage.getItem('lx_sync_code');
-        if (url && code) {
-            console.log('[AutoLogin] 检测到远程同步设置，正在自动连接...');
-            // Fill UI
-            document.getElementById('sync-remote-url').value = url;
-            document.getElementById('sync-remote-step1').classList.add('hidden');
-            document.getElementById('sync-remote-step2').classList.remove('hidden');
-            document.getElementById('sync-remote-code').value = code;
-            // Trigger connect
-            handleRemoteConnect();
-        }
-    }
+    }, 100);
 
     // [New] 全局精简播放栏控制函数
     window.setCompactPlaybar = function (compact, showToastMsg = false) {
@@ -8734,6 +9205,11 @@ function initAudioEngine() {
         if (window.musicVisualizer && window.musicVisualizer.init) {
             window.musicVisualizer.init();
         }
+
+        // iOS: 在用户手势上下文中立即启动 anchor audio，建立后台音频会话
+        if (window.iOSBackgroundAudio) {
+            window.iOSBackgroundAudio.ensureAnchorPlaying();
+        }
     }
 }
 
@@ -8873,3 +9349,525 @@ if (document.readyState === 'loading') {
 } else {
     initSearchTips();
 }
+// ===== 持久化 Token 管理逻辑 =====
+
+/**
+ * 加载并渲染持久化 Token 配置
+ */
+async function loadTokenConfig() {
+    const section = document.getElementById('token-management-section');
+    if (!section) return;
+
+    try {
+        const res = await fetch('/api/user/token/config', {
+            headers: getUserAuthHeaders()
+        });
+        if (!res.ok) throw new Error('Failed to load token config');
+
+        const { config } = await res.json();
+        const toggle = document.getElementById('setting-enable-persistent-token');
+        const container = document.getElementById('token-list-container');
+
+        if (toggle) toggle.checked = config.enabled;
+
+        // [核心改进] 关闭认证时彻底隐藏下方列表
+        if (config.enabled) {
+            container.classList.remove('hidden', 'opacity-50', 'pointer-events-none');
+        } else {
+            container.classList.add('hidden');
+        }
+
+        // 同步到全局 settings
+        settings.enablePersistentToken = config.enabled;
+
+        renderTokenList(config.tokens || []);
+    } catch (e) {
+        console.error('[Token] Failed to load config:', e);
+    }
+}
+
+/**
+ * 渲染 Token 列表 UI
+ */
+function renderTokenList(tokens) {
+    const list = document.getElementById('token-items');
+    if (!list) return;
+
+    if (tokens.length === 0) {
+        list.innerHTML = '<div class="text-[10px] t-text-muted text-center py-6 border-2 border-dashed t-border-main rounded-xl italic opacity-60">暂无生成的 API Token</div>';
+        return;
+    }
+
+    list.innerHTML = tokens.map(t => {
+        const masked = `${t.token.slice(0, 6)}...${t.token.slice(-4)}`;
+        const isExpired = t.expiresAt && t.expiresAt < Date.now();
+        const isDisabled = !!t.disabled;
+
+        return `
+        <div class="t-bg-item rounded-3xl p-4 md:p-6 border t-border-main hover:t-border-primary transition-all duration-300 group ${isExpired || isDisabled ? 'opacity-60' : ''}">
+            <div class="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                <div class="flex-1 min-w-0">
+                    <div class="text-sm font-bold t-text-main mb-1.5 truncate flex flex-wrap items-center gap-2">
+                        <span>${t.name}</span>
+                        <span class="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 text-[10px] font-mono border border-emerald-500/20">${masked}</span>
+                        ${isExpired ? '<span class="px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 text-[9px] font-bold border border-red-500/20 whitespace-nowrap">已过期</span>' : ''}
+                        ${isDisabled ? '<span class="px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-500 text-[9px] font-bold border border-orange-500/20 whitespace-nowrap">已禁用</span>' : ''}
+                    </div>
+                    <div class="text-[11px] t-text-muted mt-2 flex flex-col sm:flex-row sm:flex-wrap gap-y-1 sm:gap-x-4 items-start sm:items-center opacity-80">
+                        <span class="inline-flex items-center gap-1.5"><i class="far fa-calendar-plus opacity-50 text-[10px]"></i> ${new Date(t.createdAt).toLocaleString()}</span>
+                        <span class="inline-flex items-center gap-1.5"><i class="far fa-clock opacity-50 text-[10px]"></i> ${t.expiresAt ? new Date(t.expiresAt).toLocaleString() : '永久有效'}</span>
+                    </div>
+                    ${t.lastUsed ? `<div class="text-[10px] text-emerald-500/90 mt-2 flex items-center gap-1.5 font-medium"><i class="fas fa-history text-[9px]"></i> 最后调用: ${new Date(t.lastUsed).toLocaleString()}</div>` : ''}
+                </div>
+                
+                <div class="flex items-center justify-between md:justify-end gap-3 pt-3 md:pt-0 border-t md:border-0 t-border-main border-dashed">
+                    <!-- 状态切换 (使用统一的 Tailwind 样式) -->
+                    <div class="flex items-center gap-2">
+                        <span class="text-[11px] t-text-muted opacity-70 hidden sm:inline">${isDisabled ? '停用中' : '生效中'}</span>
+                        <label class="relative inline-flex items-center cursor-pointer scale-[0.85]">
+                            <input type="checkbox" ${!isDisabled ? 'checked' : ''} onchange="handleToggleTokenStatus('${masked}', !this.checked)" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-200/50 peer-focus:outline-none rounded-full peer dark:bg-gray-700/50 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-emerald-500"></div>
+                        </label>
+                    </div>
+                    
+                    <div class="flex items-center gap-1">
+                        <button onclick="openTokenLogsModal('${masked}', '${t.name}')" 
+                            class="p-2 md:p-2.5 rounded-xl t-bg-track hover:t-bg-primary hover:text-white transition-all group/btn" title="查看日志">
+                            <i class="fas fa-list-ul text-[13px] md:text-[14px]"></i>
+                        </button>
+                        <button onclick="openEditTokenModal('${masked}', '${t.name}', ${t.expiresAt})" 
+                            class="p-2 md:p-2.5 rounded-xl t-bg-track hover:t-bg-primary hover:text-white transition-all group/btn" title="编辑信息">
+                            <i class="fas fa-pencil-alt text-[13px] md:text-[14px]"></i>
+                        </button>
+                        <button onclick="copyTokenToClipboard('${t.token}')" 
+                            class="p-2 md:p-2.5 rounded-xl t-bg-track hover:bg-blue-500 hover:text-white transition-all group/btn" title="复制 Token">
+                            <i class="far fa-copy text-[13px] md:text-[14px]"></i>
+                        </button>
+                        <button onclick="handleRemoveToken('${t.token}')" 
+                            class="p-2 md:p-2.5 rounded-xl t-bg-track hover:bg-red-500 hover:text-white transition-all group/btn" title="删除 Token">
+                            <i class="far fa-trash-alt text-[13px] md:text-[14px]"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `
+    }).join('');
+}
+
+/**
+ * 切换单个 Token 的启用/禁用状态
+ */
+async function handleToggleTokenStatus(tokenMasked, disabled) {
+    try {
+        const res = await fetch('/api/user/token/toggle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getUserAuthHeaders() },
+            body: JSON.stringify({ tokenMasked, disabled })
+        });
+        if (res.ok) {
+            showSuccess(`已${disabled ? '停用' : '启用'}该凭证`);
+            loadTokenConfig();
+        } else {
+            showError('操作失败');
+            loadTokenConfig(); // 失败则回刷状态
+        }
+    } catch (e) {
+        showError('请求异常');
+        loadTokenConfig();
+    }
+}
+
+/**
+ * 切换 Token 校验功能显隐
+ */
+async function toggleTokenAuthSetting(enabled, silent = false) {
+    try {
+        const res = await fetch('/api/user/token/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getUserAuthHeaders() },
+            body: JSON.stringify({ enabled })
+        });
+        if (res.ok) {
+            if (!silent) showSuccess(`持久化 Token 已${enabled ? '启用' : '禁用'}`);
+            // [核心修复] 使用 updateSetting 联动同步 localStorage 和服务器 settings.json
+            await updateSetting('enablePersistentToken', enabled);
+            await loadTokenConfig();
+        } else {
+            throw new Error();
+        }
+    } catch (e) {
+        if (!silent) showError('更新 Token 配置失败');
+        // 还原 UI 开关
+        const toggle = document.getElementById('setting-enable-persistent-token');
+        if (toggle) toggle.checked = !enabled;
+    }
+}
+
+/**
+ * 打开添加 Token 模态框
+ */
+function openAddTokenModal() {
+    const modal = document.getElementById('modal-add-token');
+    const content = document.getElementById('modal-add-token-content');
+    modal.classList.remove('hidden');
+    setTimeout(() => {
+        content.classList.remove('scale-95', 'opacity-0');
+        content.classList.add('scale-100', 'opacity-100');
+    }, 10);
+
+    // 设置为“生成”模式
+    document.getElementById('token-modal-title').innerText = '生成持久化 Token';
+    document.getElementById('edit-token-masked').value = '';
+    document.getElementById('token-modal-submit-btn').innerText = '生成并保存';
+    document.getElementById('token-modal-submit-btn').onclick = handleAddToken;
+
+    document.getElementById('add-token-form').classList.remove('hidden');
+    document.getElementById('add-token-result').classList.add('hidden');
+    document.getElementById('new-token-name').value = '';
+
+    // 初始化有效期 UI
+    document.getElementById('new-token-offset-value').value = '';
+    document.getElementById('new-token-exact-date').value = '';
+    switchTokenExpireMode('offset');
+}
+
+/**
+ * 切换有效期设置模式
+ */
+function switchTokenExpireMode(mode) {
+    const btnOffset = document.getElementById('btn-expire-offset');
+    const btnDate = document.getElementById('btn-expire-date');
+    const areaOffset = document.getElementById('expire-offset-area');
+    const areaDate = document.getElementById('expire-date-area');
+
+    if (mode === 'offset') {
+        btnOffset.classList.add('t-bg-main', 'bg-white', 'dark:bg-white/10', 'shadow-sm');
+        btnOffset.classList.remove('t-text-muted');
+        btnDate.classList.remove('t-bg-main', 'bg-white', 'dark:bg-white/10', 'shadow-sm');
+        btnDate.classList.add('t-text-muted');
+        areaOffset.classList.remove('hidden');
+        areaDate.classList.add('hidden');
+    } else {
+        btnDate.classList.add('t-bg-main', 'bg-white', 'dark:bg-white/10', 'shadow-sm');
+        btnDate.classList.remove('t-text-muted');
+        btnOffset.classList.remove('t-bg-main', 'bg-white', 'dark:bg-white/10', 'shadow-sm');
+        btnOffset.classList.add('t-text-muted');
+        areaOffset.classList.add('hidden');
+        areaDate.classList.remove('hidden');
+    }
+    // 保存当前模式到全局或临时变量，以便提交时判断
+    document.getElementById('modal-add-token').dataset.expireMode = mode;
+}
+
+/**
+ * 计算选定的过期时间戳
+ */
+function calculateSelectedExpiresAt() {
+    const mode = document.getElementById('modal-add-token').dataset.expireMode;
+    if (mode === 'date') {
+        const val = document.getElementById('new-token-exact-date').value;
+        return val ? new Date(val).getTime() : null;
+    } else {
+        const val = parseFloat(document.getElementById('new-token-offset-value').value);
+        const unit = document.getElementById('new-token-offset-unit').value;
+        if (!val || val <= 0) return null;
+
+        const offsetMs = unit === 'h' ? val * 60 * 60 * 1000 : val * 24 * 60 * 60 * 1000;
+        return Date.now() + offsetMs;
+    }
+}
+
+/**
+ * 打开编辑 Token 模态框
+ */
+function openEditTokenModal(tokenMasked, name, expiresAt) {
+    const modal = document.getElementById('modal-add-token');
+    const content = document.getElementById('modal-add-token-content');
+    modal.classList.remove('hidden');
+    setTimeout(() => {
+        content.classList.remove('scale-95', 'opacity-0');
+        content.classList.add('scale-100', 'opacity-100');
+    }, 10);
+
+    // 设置为“编辑”模式
+    document.getElementById('token-modal-title').innerText = '编辑 Token 信息';
+    document.getElementById('edit-token-masked').value = tokenMasked;
+    document.getElementById('token-modal-submit-btn').innerText = '保存修改';
+    document.getElementById('token-modal-submit-btn').onclick = handleUpdateToken;
+
+    document.getElementById('add-token-form').classList.remove('hidden');
+    document.getElementById('add-token-result').classList.add('hidden');
+    document.getElementById('new-token-name').value = name || '';
+
+    if (expiresAt) {
+        switchTokenExpireMode('date');
+        // 将时间戳转为 datetime-local 格式: YYYY-MM-DDTHH:mm
+        const date = new Date(expiresAt);
+        const yyyy = date.getFullYear();
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const dd = String(date.getDate()).padStart(2, '0');
+        const hh = String(date.getHours()).padStart(2, '0');
+        const min = String(date.getMinutes()).padStart(2, '0');
+        document.getElementById('new-token-exact-date').value = `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+        document.getElementById('new-token-offset-value').value = '';
+    } else {
+        switchTokenExpireMode('offset');
+        document.getElementById('new-token-offset-value').value = '';
+        document.getElementById('new-token-exact-date').value = '';
+    }
+}
+
+/**
+ * 处理更新 Token 信息
+ */
+async function handleUpdateToken() {
+    const tokenMasked = document.getElementById('edit-token-masked').value;
+    const name = document.getElementById('new-token-name').value.trim();
+    const expiresAt = calculateSelectedExpiresAt();
+
+    if (!name) return showError('请填写 Token 名称');
+
+    try {
+        const res = await fetch('/api/user/token/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getUserAuthHeaders() },
+            body: JSON.stringify({ tokenMasked, name, expiresAt })
+        });
+        if (res.ok) {
+            showSuccess('修改已保存');
+            closeAddTokenModal();
+            loadTokenConfig();
+        } else {
+            showError('保存失败');
+        }
+    } catch (e) {
+        showError('请求异常');
+    }
+}
+
+/**
+ * 关闭添加 Token 模态框
+ */
+function closeAddTokenModal() {
+    const modal = document.getElementById('modal-add-token');
+    const content = document.getElementById('modal-add-token-content');
+    content.classList.add('scale-95', 'opacity-0');
+    content.classList.remove('scale-100', 'opacity-100');
+    setTimeout(() => modal.classList.add('hidden'), 300);
+}
+
+/**
+ * 处理添加新 Token
+ */
+async function handleAddToken() {
+    const name = document.getElementById('new-token-name').value.trim();
+    const expiresAt = calculateSelectedExpiresAt();
+
+    if (!name) {
+        showError('请填写 Token 名称');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/user/token/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getUserAuthHeaders() },
+            body: JSON.stringify({ name, expiresAt })
+        });
+        const result = await res.json();
+        if (result.success) {
+            document.getElementById('add-token-form').classList.add('hidden');
+            const resultArea = document.getElementById('add-token-result');
+            resultArea.classList.remove('hidden');
+            document.getElementById('generated-token-value').value = result.token;
+            loadTokenConfig();
+        } else {
+            showError(result.message || '生成失败');
+        }
+    } catch (e) {
+        showError('生成器异常');
+    }
+}
+
+/**
+ * 处理删除 Token
+ */
+async function handleRemoveToken(token) {
+    if (!await showSelect('确定删除', `确定要永久删除此 Token 吗？\n所有使用此凭证的外部工具将立即无法连接。`, { danger: true })) return;
+    try {
+        const res = await fetch('/api/user/token/remove', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getUserAuthHeaders() },
+            body: JSON.stringify({ token: token })
+        });
+        if (res.ok) {
+            showSuccess('Token 已移除');
+            loadTokenConfig();
+        }
+    } catch (e) {
+        showError('删除失败');
+    }
+}
+
+/**
+ * 查看 Token 调用日志
+ */
+let currentViewingTokenMasked = '';
+
+/**
+ * 刷新 Token 调用日志记录
+ */
+async function handleRefreshTokenLogs() {
+    if (!currentViewingTokenMasked) return;
+    const list = document.getElementById('token-logs-list');
+    const refreshBtn = document.getElementById('btn-refresh-token-logs');
+
+    // 增加旋转动画
+    if (refreshBtn) {
+        const icon = refreshBtn.querySelector('i');
+        if (icon) icon.classList.add('animate-spin');
+    }
+
+    try {
+        const res = await fetch(`/api/user/token/logs?tokenMasked=${encodeURIComponent(currentViewingTokenMasked)}`, {
+            headers: getUserAuthHeaders()
+        });
+        if (!res.ok) throw new Error('Failed to fetch logs');
+
+        const { logs } = await res.json();
+        if (!logs || logs.length === 0) {
+            list.innerHTML = '<div class="py-12 text-center t-text-muted italic opacity-50">暂无该 Token 的调用日志</div>';
+        } else {
+            // 解析日志行，美化显示
+            list.innerHTML = logs.map(line => {
+                // [语义化解析] 提取审计日志核心字段
+                const auditMatch = line.match(/used by (.*?) from (.*?) to access (.*?)$/);
+                const timeMatch = line.match(/\[([\d-T:\.]+)\]/);
+                const timeStr = timeMatch ? timeMatch[1].split('T')[1]?.split('.')[0] || '未知' : '未知';
+
+                // 情况 A: 标准 API 调用流水
+                if (auditMatch) {
+                    const [, user, ip, url] = auditMatch;
+                    return `
+                    <div class="p-3.5 rounded-2xl t-bg-track border t-border-main flex flex-col gap-2 transition-all hover:t-border-primary border-transparent">
+                        <div class="flex items-center justify-between border-b t-border-main border-dashed pb-2 mb-1 opacity-80">
+                            <div class="flex items-center gap-1.5">
+                                <i class="fas fa-fingerprint text-[10px] text-emerald-500"></i>
+                                <span class="text-[10px] font-bold t-text-main">用户 ${user}</span>
+                            </div>
+                            <span class="px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-500 font-mono text-[9px]">${timeStr}</span>
+                        </div>
+                        <div class="space-y-1.5">
+                            <div class="flex items-center gap-2 text-[11px] t-text-main">
+                                <i class="fas fa-network-wired w-4 opacity-40 text-center"></i>
+                                <span class="opacity-50">来源 IP:</span> <span class="font-mono text-emerald-500/80 tracking-tighter">${ip}</span>
+                            </div>
+                            <div class="flex items-start gap-2 text-[11px] t-text-main">
+                                <i class="fas fa-link w-4 opacity-40 text-center mt-0.5"></i>
+                                <div class="flex-1">
+                                    <span class="opacity-50">请求路径:</span> 
+                                    <span class="font-medium break-all text-blue-500/80 ml-1 italic font-mono">${url}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+                }
+
+                // 情况 B: 系统配置审计 (手动开启/关闭)
+                if (line.includes('token auth')) {
+                    const isEnabled = line.includes('enabled');
+                    return `
+                    <div class="p-3 rounded-2xl bg-blue-500/5 border border-blue-500/15 flex items-center justify-between">
+                         <div class="flex items-center gap-3">
+                             <div class="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-500">
+                                 <i class="fas ${isEnabled ? 'fa-toggle-on' : 'fa-toggle-off'} text-xs"></i>
+                             </div>
+                             <div class="text-[11px] t-text-main font-extrabold">全局：${isEnabled ? '启用' : '停用'} API 验证鉴权</div>
+                         </div>
+                         <span class="text-[9px] t-text-muted opacity-60">${timeStr}</span>
+                    </div>`;
+                }
+
+                // 情况 C: 原始日志 (兜底显示)
+                return `<div class="p-3 t-bg-track rounded-xl t-text-muted text-[10px] opacity-70 italic border t-border-main border-dashed">${line}</div>`;
+            }).join('');
+        }
+    } catch (e) {
+        console.error('[TokenLog] Error:', e);
+        list.innerHTML = `<div class="py-12 text-center text-red-500 italic opacity-50">拉取日志失败: ${e.message}</div>`;
+    } finally {
+        if (refreshBtn) {
+            setTimeout(() => {
+                const icon = refreshBtn.querySelector('i');
+                if (icon) icon.classList.remove('animate-spin');
+            }, 500);
+        }
+    }
+}
+
+/**
+ * 查看 Token 调用日志
+ */
+async function openTokenLogsModal(tokenMasked, name) {
+    currentViewingTokenMasked = tokenMasked;
+    const modal = document.getElementById('modal-token-logs');
+    const content = document.getElementById('modal-token-logs-content');
+    const list = document.getElementById('token-logs-list');
+    const nameEl = document.getElementById('log-token-name');
+
+    nameEl.innerText = `Token: ${name} (${tokenMasked})`;
+    list.innerHTML = '<div class="py-12 text-center t-text-muted italic opacity-50 animate-pulse">正在从日志服务器拉取记录...</div>';
+
+    modal.classList.remove('hidden');
+    setTimeout(() => {
+        content.classList.remove('scale-95', 'opacity-0');
+        content.classList.add('scale-100', 'opacity-100');
+    }, 10);
+
+    handleRefreshTokenLogs();
+}
+
+/**
+ * 关闭 Token 调用日志模态框
+ */
+function closeTokenLogsModal() {
+    const modal = document.getElementById('modal-token-logs');
+    const content = document.getElementById('modal-token-logs-content');
+    if (content) {
+        content.classList.add('scale-95', 'opacity-0', 'duration-300');
+        content.classList.remove('scale-100', 'opacity-100');
+    }
+    setTimeout(() => {
+        if (modal) modal.classList.add('hidden');
+    }, 300);
+}
+
+/**
+ * 复制到剪切板
+ */
+function copyTokenToClipboard(token) {
+    if (!token) return;
+    navigator.clipboard.writeText(token).then(() => showSuccess('Token 已复制到剪贴板'));
+}
+
+function copyGeneratedToken() {
+    const val = document.getElementById('generated-token-value').value;
+    if (val) {
+        navigator.clipboard.writeText(val).then(() => showSuccess('Token 已成功保存至剪贴板'));
+    }
+}
+
+// 暴漏到全局
+window.toggleTokenAuthSetting = toggleTokenAuthSetting;
+window.openAddTokenModal = openAddTokenModal;
+window.closeAddTokenModal = closeAddTokenModal;
+window.handleAddToken = handleAddToken;
+window.handleRemoveToken = handleRemoveToken;
+window.openTokenLogsModal = openTokenLogsModal;
+window.closeTokenLogsModal = closeTokenLogsModal;
+window.handleRefreshTokenLogs = handleRefreshTokenLogs;
+window.copyTokenToClipboard = copyTokenToClipboard;
+window.copyGeneratedToken = copyGeneratedToken;
+window.loadTokenConfig = loadTokenConfig;
+

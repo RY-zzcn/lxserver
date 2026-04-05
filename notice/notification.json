@@ -18,25 +18,25 @@
         }
     },
     {
-        "comment": "=== 版本更新 v1.8.0 ===",
-        "id": "update_v1_8_0",
+        "comment": "=== 版本更新 v1.8.2 ===",
+        "id": "update_v1_8_2",
         "status": "active",
         "type": "version",
         "logic": {
-            "target_version": "v1.8.0",
+            "target_version": "v1.8.2",
             "operator": "<",
             "interval_hours": 24
         },
         "ui": {
-            "title": "发现新版本 v1.8.0",
-            "date": "2026-03-25",
-            "message": "本次更新带来了以下升级：\n1. 🏆 音乐排行榜：集成多平台榜单数据，支持分页加载与一键播放全部。\n2. ⌨️ 快捷键增强：新增 H (缓存面板) 与 J (下载面板) 快速开关快捷键。\n3. � 词库兼容性：修复并增强了多版本客户端的歌词缓存获取接口。\n4. ⚙️ 系统优化：优化了排行榜默认音源逻辑及部分 WebSocket 同步问题。",
+            "title": "发现新版本 v1.8.2",
+            "date": "2026-04-03",
+            "message": "本次更新带来了以下升级：\n1. 🔑 安全与授权：新增 Token 管理面板，支持生成长期有效的 Token 用于 API 调用。\n2. 📱 iOS 播放修复：解决了 iOS 锁屏或后台切出时音频自动暂停的问题。 (#61)\n3. 🛰️ 客户端模式：支持每次登陆本地账户都会模拟客户端向远程服务器发起同步请求。\n4. 🚀 性能与修复：显著提升网页首屏加载速度，修复存储路径及模态框样式问题。",
             "confirm_text": "立即查看",
             "cancel_text": "稍后提醒"
         },
         "action": {
             "type": "link",
-            "url": "https://github.com/XCQ0607/lxserver/releases/tag/v1.8.0"
+            "url": "https://github.com/XCQ0607/lxserver/releases/tag/v1.8.2"
         }
     }
 ]

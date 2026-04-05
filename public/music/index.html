@@ -770,7 +770,7 @@
             <!-- Mini Player Info (Optional, cover art here) -->
             <div class="hidden md:block [@media(max-height:650px)]:!hidden sidebar-song-info-wrapper mt-auto">
                 <div id="sidebar-song-info" class="p-4 border-t t-border-main hidden">
-                    <img id="sidebar-cover" src="/music/assets/logo.svg"
+                    <img id="sidebar-cover" src="/music/assets/logo.svg" loading="lazy" fetchpriority="low"
                         onerror="this.src='/music/assets/logo.svg'; this.classList.add('is-placeholder');" alt="Cover"
                         class="w-full rounded-lg shadow-md mb-3 dynamic-logo is-placeholder">
                     <div class="text-center flex flex-col items-center">
@@ -1140,7 +1140,7 @@
                             <!-- Info Section -->
                             <div id="sl-detail-header"
                                 class="p-4 md:p-6 flex gap-4 md:gap-6 border-b t-border-main t-bg-panel/30">
-                                <img id="sl-detail-cover"
+                                <img id="sl-detail-cover" loading="lazy" fetchpriority="low"
                                     class="w-24 h-24 md:w-48 md:h-48 rounded-2xl shadow-xl flex-shrink-0 object-cover dynamic-logo is-placeholder"
                                     src="/music/assets/logo.svg">
                                 <div class="flex flex-col justify-center gap-1 md:gap-3 flex-1 min-w-0">
@@ -1784,6 +1784,36 @@
                                 <div id="sync-status" class="mt-3 text-sm text-gray-500 flex items-center gap-2">
                                     <i class="fas fa-circle text-[8px] text-gray-300"></i> 状态: 未连接
                                 </div>
+
+                                <!-- Token Management Section (Shown after local login) -->
+                                <div id="token-management-section"
+                                    class="mt-6 pt-4 border-t t-border-main hidden animate-fade-in">
+                                    <div class="flex items-center justify-between mb-4">
+                                        <div class="flex flex-col">
+                                            <h4 class="text-sm font-bold t-text-main flex items-center gap-2">
+                                                <i class="fas fa-key text-emerald-500"></i> 启用 Token 认证
+                                            </h4>
+                                            <span class="text-[10px] t-text-muted mt-0.5">API 访问凭证管理</span>
+                                        </div>
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" id="setting-enable-persistent-token"
+                                                class="sr-only peer" onchange="toggleTokenAuthSetting(this.checked)">
+                                            <div
+                                                class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500 transition-all">
+                                            </div>
+                                        </label>
+                                    </div>
+                                    <div id="token-list-container"
+                                        class="space-y-4 opacity-50 pointer-events-none transition-all duration-300">
+                                        <div id="token-items" class="space-y-2 max-h-60 overflow-y-auto hide-scrollbar">
+                                            <!-- Token 列表由 JS 注入 -->
+                                        </div>
+                                        <button onclick="openAddTokenModal()"
+                                            class="w-full py-2 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-500/20 rounded-xl text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-2">
+                                            <i class="fas fa-plus"></i> 生成新验证 Token
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
 
                             <!-- Auto Update Settings -->
@@ -1832,6 +1862,16 @@
                                                 class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500 transition-all">
                                             </div>
                                         </label>
+                                    </div>
+
+                                    <!-- [Manual Save Settings Button] -->
+                                    <div class="pt-4 mt-4 border-t t-border-main">
+                                        <button onclick="manualSaveSettings(this)"
+                                            class="w-full py-2.5 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-500/20 rounded-xl text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-all flex items-center justify-center gap-2 shadow-sm">
+                                            <i class="fas fa-save"></i> 立即保存所有配置到服务器 (Save & Sync)
+                                        </button>
+                                        <p class="text-[10px] t-text-muted mt-2 text-center opacity-70">手动将当前所有 UI
+                                            设置（包含音质、音效等）缓存并保存至服务器对应用户的对应json文件中。</p>
                                     </div>
                                 </div>
                             </div>
@@ -2982,7 +3022,7 @@
             <!-- Left: Image -->
             <div id="mobile-player-cover-container" ondblclick="toggleDetailCover()"
                 class="w-auto h-auto max-w-[48vw] max-h-[32vh] [@media(max-height:500px)]:max-h-[40vh] aspect-square md:w-[60vh] md:h-[60vh] md:max-w-[35rem] md:max-h-[35rem] md:min-w-[20rem] md:min-h-[20rem] flex-shrink-0 shadow-2xl rounded-3xl overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] border-4 border-white/20 origin-top t-bg-track cursor-pointer">
-                <img id="detail-cover" src="/music/assets/logo.svg"
+                <img id="detail-cover" src="/music/assets/logo.svg" loading="lazy" fetchpriority="low"
                     onerror="this.src='/music/assets/logo.svg'; this.classList.add('is-placeholder');"
                     class="w-full h-full object-cover dynamic-logo is-placeholder">
             </div>
@@ -3047,7 +3087,7 @@
             class="w-full md:w-1/4 flex items-start md:items-center gap-2 md:gap-4 mb-2 md:mb-0 pr-8 md:pr-0 transition-all duration-300">
             <div
                 class="w-12 h-12 md:w-14 md:h-14 bg-gray-200 rounded-md overflow-hidden shadow-sm relative group flex-shrink-0">
-                <img id="player-cover" src="/music/assets/logo.svg"
+                <img id="player-cover" src="/music/assets/logo.svg" loading="lazy" fetchpriority="low"
                     onerror="this.src='/music/assets/logo.svg'; this.classList.add('is-placeholder');"
                     class="w-full h-full object-cover dynamic-logo is-placeholder" alt="专辑封面">
                 <div class="absolute inset-0 bg-black/30 hidden group-hover:flex items-center justify-center cursor-pointer"
@@ -3479,8 +3519,8 @@
 
     <!-- Sleep Timer Modal -->
     <div id="sleep-timer-modal"
-        class="fixed inset-0 bg-black/40 z-[70] hidden items-center justify-center backdrop-blur-sm transition-opacity duration-300">
-        <div class="t-bg-panel/90 backdrop-blur-xl rounded-3xl w-full max-w-sm flex flex-col shadow-2xl border border-white/20 transform transition-all duration-300 scale-95 opacity-0"
+        class="fixed inset-0 bg-black/40 z-[70] hidden items-center justify-center transition-opacity duration-300">
+        <div class="t-bg-panel rounded-3xl w-full max-w-sm flex flex-col shadow-2xl border t-border-main transform transition-all duration-300 scale-95 opacity-0"
             id="sleep-timer-modal-content">
             <div class="p-6">
                 <!-- Header -->
@@ -4225,6 +4265,7 @@
     <script src="/music/js/visualizer.js"></script>
     <script src="/music/js/pwa.js"></script>
     <script src="/music/js/lyric-card.js"></script>
+    <script src="/music/js/ios-background-audio.js"></script>
     <script src="/music/js/sound-effects.js"></script>
     <script src="/music/js/download_manager.js"></script>
     <script src="/music/app.js"></script>
@@ -4258,6 +4299,231 @@
             }
         }, { passive: true });
     </script>
+    <!-- Add/Edit Token Modal -->
+    <div id="modal-add-token"
+        class="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 hidden animate-fade-in px-4">
+        <div class="t-bg-panel w-full max-w-sm rounded-[2rem] shadow-2xl overflow-hidden border t-border-main transition-all transform scale-95 opacity-0 duration-300"
+            id="modal-add-token-content">
+            <div class="p-8">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 id="token-modal-title" class="text-xl font-bold t-text-main tracking-tight">生成持久化 Token</h3>
+                    <button onclick="closeAddTokenModal()"
+                        class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                        <i class="fas fa-times t-text-muted"></i>
+                    </button>
+                </div>
+
+                <div id="add-token-form" class="space-y-5">
+                    <input type="hidden" id="edit-token-masked" value="">
+                    <div>
+                        <label
+                            class="block text-[11px] uppercase tracking-[0.1em] font-bold t-text-muted mb-2 ml-1 opacity-80">Token
+                            名称 (识别用)</label>
+                        <input type="text" id="new-token-name" placeholder="如：Python 脚本、工作电脑"
+                            class="w-full px-4 py-3.5 t-bg-track border t-border-main rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/50 t-text-main transition-all placeholder:opacity-30">
+                    </div>
+                    <div class="space-y-3">
+                        <label
+                            class="block text-[11px] uppercase tracking-[0.1em] font-bold t-text-muted ml-1 opacity-80">有效期设置</label>
+                        <div class="flex p-1 t-bg-track rounded-2xl border t-border-main">
+                            <button type="button" onclick="switchTokenExpireMode('offset')" id="btn-expire-offset"
+                                class="flex-1 py-2 text-xs font-bold rounded-xl t-text-main bg-white dark:bg-white/10 shadow-sm transition-all">快速时长</button>
+                            <button type="button" onclick="switchTokenExpireMode('date')" id="btn-expire-date"
+                                class="flex-1 py-2 text-xs font-bold rounded-xl t-text-muted hover:t-text-main transition-all">指定日期</button>
+                        </div>
+
+                        <!-- 模式 1: 偏移时长 -->
+                        <div id="expire-offset-area" class="flex gap-2">
+                            <input type="number" id="new-token-offset-value" placeholder="30"
+                                class="flex-1 px-4 py-3.5 t-bg-track border t-border-main rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/50 t-text-main transition-all">
+                            <select id="new-token-offset-unit"
+                                class="w-24 px-2 py-3.5 t-bg-track border t-border-main rounded-2xl text-xs focus:outline-none t-text-main">
+                                <option value="h">小时</option>
+                                <option value="d" selected>天</option>
+                            </select>
+                        </div>
+
+                        <!-- 模式 2: 指定日期 -->
+                        <div id="expire-date-area" class="hidden">
+                            <input type="datetime-local" id="new-token-exact-date"
+                                class="w-full px-4 py-3.5 t-bg-track border t-border-main rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/50 t-text-main transition-all">
+                        </div>
+                        <p class="text-[9px] t-text-muted mt-1 ml-1 opacity-60">* 留空或设置为 0 则代表永久有效</p>
+                    </div>
+
+                    <div class="mt-8 flex gap-4">
+                        <button onclick="closeAddTokenModal()"
+                            class="flex-1 py-3.5 t-bg-track t-text-main font-bold rounded-2xl hover:opacity-80 transition-all">取消</button>
+                        <button id="token-modal-submit-btn" onclick="handleAddToken()"
+                            class="flex-[1.5] py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl shadow-lg shadow-emerald-500/20 transition-all active:scale-[0.98]">生成并保存</button>
+                    </div>
+                </div>
+
+                <div id="add-token-result" class="hidden space-y-5 animate-fade-in">
+                    <div class="p-5 bg-emerald-500/5 dark:bg-emerald-500/10 rounded-2xl border border-emerald-500/20">
+                        <p class="text-xs text-emerald-600 dark:text-emerald-400 font-bold mb-3 leading-relaxed">Token
+                            生成成功！请务必立即复制并保存，离开后将无法再次查看全文。</p>
+                        <div class="relative group">
+                            <input type="text" id="generated-token-value" readonly
+                                class="w-full pr-12 pl-4 py-3.5 t-bg-track border border-emerald-500/20 rounded-xl text-xs font-mono t-text-main focus:outline-none shadow-inner">
+                            <button onclick="copyGeneratedToken()"
+                                class="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-emerald-500/10 hover:bg-emerald-500/20 t-text-main rounded-lg transition-all">
+                                <i class="fas fa-copy text-emerald-500"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <button onclick="closeAddTokenModal()"
+                        class="w-full py-4 bg-emerald-500 text-white font-bold rounded-2xl shadow-lg shadow-emerald-500/25 transition-all">我知道了</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Token Logs Modal -->
+    <div id="modal-token-logs"
+        class="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 hidden animate-fade-in px-4">
+        <div class="t-bg-panel w-full max-w-lg rounded-[2rem] shadow-2xl overflow-hidden border t-border-main transition-all transform scale-95 opacity-0 duration-300"
+            id="modal-token-logs-content">
+            <div class="p-8 flex flex-col max-h-[85vh]">
+                <div class="flex items-center justify-between mb-6 flex-shrink-0">
+                    <div class="flex flex-col">
+                        <h3 class="text-xl font-bold t-text-main tracking-tight">Token 调用详志</h3>
+                        <span id="log-token-name" class="text-[10px] t-text-muted mt-0.5">加载中...</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="handleRefreshTokenLogs()" id="btn-refresh-token-logs"
+                            class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-all text-emerald-500"
+                            title="刷新记录">
+                            <i class="fas fa-sync-alt text-xs"></i>
+                        </button>
+                        <button onclick="closeTokenLogsModal()"
+                            class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                            <i class="fas fa-times t-text-muted"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="token-logs-list"
+                    class="space-y-3 overflow-y-auto flex-1 pr-2 custom-scrollbar min-h-[200px] text-[11px] leading-relaxed">
+                    <div class="py-12 text-center t-text-muted italic opacity-50">正在加载日志记录...</div>
+                </div>
+
+                <div class="mt-8 flex-shrink-0">
+                    <button onclick="closeTokenLogsModal()"
+                        class="w-full py-3.5 t-bg-track t-text-main font-bold rounded-2xl hover:opacity-80 transition-all">返回面板</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Remote Overwrite Modal -->
+    <div id="modal-remote-overwrite"
+        class="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 hidden animate-fade-in px-4">
+        <div class="t-bg-panel w-full max-w-sm rounded-[2rem] shadow-2xl overflow-hidden border t-border-main transition-all transform scale-95 opacity-0 duration-300"
+            id="modal-remote-overwrite-content">
+            <div class="p-8">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-xl font-bold t-text-main tracking-tight">同步数据 (Sync)</h3>
+                    <button onclick="closeRemoteOverwriteModal()"
+                        class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                        <i class="fas fa-times t-text-muted"></i>
+                    </button>
+                </div>
+
+                <div id="remote-overwrite-step1" class="space-y-4">
+                    <p class="text-xs t-text-muted leading-relaxed">连接 LX Music 远程服务器，连接成功后可选择数据同步方向。</p>
+                    <div>
+                        <label
+                            class="block text-[11px] uppercase tracking-[0.1em] font-bold t-text-muted mb-2 ml-1 opacity-80">服务器地址
+                            (WS/HTTP)</label>
+                        <input type="text" id="remote-overwrite-url" placeholder="ws://192.168.1.1:9527"
+                            class="w-full px-4 py-3.5 t-bg-track border t-border-main rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/50 t-text-main transition-all placeholder:opacity-30">
+                    </div>
+                    <div>
+                        <label
+                            class="block text-[11px] uppercase tracking-[0.1em] font-bold t-text-muted mb-2 ml-1 opacity-80">连接码
+                            (Code)</label>
+                        <input type="password" id="remote-overwrite-code" placeholder="输入连接码"
+                            class="w-full px-4 py-3.5 t-bg-track border t-border-main rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/50 t-text-main transition-all placeholder:opacity-30">
+                    </div>
+                    <div class="flex items-center justify-between px-1">
+                        <div class="flex items-center gap-2">
+                            <label
+                                class="text-[11px] font-bold t-text-main flex items-center cursor-pointer select-none">
+                                <input type="checkbox" id="setting-client-mode-sync"
+                                    class="mr-2 accent-emerald-500 w-3.5 h-3.5"
+                                    onchange="updateSetting('enableClientModeSync', this.checked)">
+                                客户端模式 (Client Mode)
+                            </label>
+                            <span class="setting-tooltip-trigger">
+                                <i class="fas fa-question-circle text-[10px] t-text-muted opacity-60"></i>
+                                <span class="setting-tooltip-content">模仿客户端模式每次登陆本地账户都会模拟客户端向远程服务器发起同步请求</span>
+                            </span>
+                        </div>
+                    </div>
+                    <div id="remote-overwrite-status" class="text-xs text-center min-h-[1.5rem] t-text-muted"></div>
+                    <button onclick="handleRemoteOverwriteConnect()"
+                        class="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl shadow-lg shadow-emerald-500/20 transition-all active:scale-[0.98]">
+                        连接远程服务器
+                    </button>
+                </div>
+
+                <div id="remote-overwrite-mode-selection" class="hidden space-y-3">
+                    <p class="text-xs t-text-muted mb-1 text-center font-medium">连接成功！请选择同步方向：</p>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="selectRemoteOverwriteMode('overwrite_local_remote_full')"
+                            class="p-4 border t-border-main rounded-2xl hover:t-bg-item-hover transition-all text-center group">
+                            <div class="font-bold text-xs t-text-main group-hover:text-emerald-500">本地覆盖远程</div>
+                            <div class="text-[9px] t-text-muted mt-1">(Local Overwrite)</div>
+                        </button>
+                        <button onclick="selectRemoteOverwriteMode('merge_local_remote')"
+                            class="p-4 border t-border-main rounded-2xl hover:t-bg-item-hover transition-all text-center group">
+                            <div class="font-bold text-xs t-text-main group-hover:text-emerald-500">本地合并至远程</div>
+                            <div class="text-[9px] t-text-muted mt-1">(Local Merge)</div>
+                        </button>
+                        <button onclick="selectRemoteOverwriteMode('overwrite_remote_local_full')"
+                            class="p-4 border t-border-main rounded-2xl hover:t-bg-item-hover transition-all text-center group">
+                            <div class="font-bold text-xs t-text-main group-hover:text-blue-500">远程覆盖本地</div>
+                            <div class="text-[9px] t-text-muted mt-1">(Remote Overwrite)</div>
+                        </button>
+                        <button onclick="selectRemoteOverwriteMode('merge_remote_local')"
+                            class="p-4 border t-border-main rounded-2xl hover:t-bg-item-hover transition-all text-center group">
+                            <div class="font-bold text-xs t-text-main group-hover:text-blue-500">远程合并至本地</div>
+                            <div class="text-[9px] t-text-muted mt-1">(Remote Merge)</div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Step 2: Running (Spinner) -->
+                <div id="remote-overwrite-step2" class="hidden space-y-6 text-center py-4">
+                    <div class="flex justify-center">
+                        <div
+                            class="w-16 h-16 border-4 border-emerald-100 border-t-emerald-500 rounded-full animate-spin">
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="text-lg font-bold t-text-main">正在同步数据...</h4>
+                        <p class="text-xs t-text-muted mt-2">请勿关闭窗口，正在同步歌单数据...</p>
+                    </div>
+                </div>
+
+                <!-- Result -->
+                <div id="remote-overwrite-result" class="hidden space-y-6 text-center py-4">
+                    <div class="flex justify-center">
+                        <div
+                            class="w-16 h-16 bg-emerald-500 text-white rounded-full flex items-center justify-center text-3xl shadow-lg shadow-emerald-200">
+                            <i class="fas fa-check"></i>
+                        </div>
+                    </div>
+                    <div>
+                        <h4 id="remote-overwrite-result-title" class="text-lg font-bold t-text-main">同步成功！</h4>
+                        <p id="remote-overwrite-result-text" class="text-xs t-text-muted mt-2">数据同步任务已完成。</p>
+                    </div>
+                    <button onclick="closeRemoteOverwriteModal(true)"
+                        class="w-full py-4 bg-emerald-500 text-white font-bold rounded-2xl shadow-lg shadow-emerald-500/25 transition-all">确定</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>

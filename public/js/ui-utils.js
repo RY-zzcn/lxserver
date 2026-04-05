@@ -17,6 +17,15 @@
         .animate-marquee { display: inline-block; animation: marquee 10s linear infinite; }
         .pause-animation { animation-play-state: paused; }
         
+        /* Premium Solid Style for Toasts (Better Legibility) */
+        .lx-toast-card {
+            font-family: 'Outfit', sans-serif !important;
+            background: #1a1a1a !important; 
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05) !important;
+            color: #ffffff !important;
+        }
+
         /* Premium Glassmorphism Overrides */
         .lx-glass {
             font-family: 'Outfit', sans-serif !important;
@@ -53,55 +62,69 @@
             border-color: rgba(16, 185, 129, 0.5) !important;
             box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1) !important;
         }
+        .lx-close-btn {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            outline: none !important;
+            cursor: pointer !important;
+            transition: all 0.2s !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+        .lx-close-btn:hover {
+            background: rgba(255, 255, 255, 0.1) !important;
+        }
     `;
     document.head.appendChild(style);
 
     /**
-     * Fresh Toast Notification (Pill Style)
+     * Fresh Toast Notification (Solid Card Style)
      */
     function showToast(type, message, duration = 3000) {
         const config = {
-            success: { gradient: 'from-emerald-400/90 to-teal-500/90', icon: 'fa-check-circle', shadow: 'shadow-emerald-500/20' },
-            info: { gradient: 'from-blue-400/90 to-indigo-500/90', icon: 'fa-info-circle', shadow: 'shadow-blue-500/20' },
-            error: { gradient: 'from-rose-400/90 to-red-500/90', icon: 'fa-exclamation-circle', shadow: 'shadow-rose-500/20' }
+            success: { gradient: 'from-emerald-400 to-teal-500', icon: 'fa-check-circle' },
+            info: { gradient: 'from-blue-400 to-indigo-500', icon: 'fa-info-circle' },
+            error: { gradient: 'from-rose-400 to-red-500', icon: 'fa-exclamation-circle' }
         };
         const conf = config[type] || config.info;
 
         const toast = document.createElement('div');
-        toast.className = `toast-item fixed top-8 right-8 z-[2000] lx-toast-in`;
+        toast.className = `toast-item fixed bottom-8 right-8 z-[5000] lx-toast-in`;
 
         toast.innerHTML = `
-            <div class="lx-glass px-5 py-3.5 rounded-full flex items-center gap-4 min-w-[300px] max-w-[450px] ${conf.shadow}">
-                <div class="w-10 h-10 rounded-full bg-gradient-to-br ${conf.gradient} flex items-center justify-center text-white shadow-lg shrink-0">
+            <div class="lx-toast-card px-5 py-3.5 rounded-2xl flex items-center gap-4 min-w-[320px] max-w-[450px]">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br ${conf.gradient} flex items-center justify-center text-white shadow-lg shrink-0">
                     <i class="fas ${conf.icon} text-lg"></i>
                 </div>
                 <div class="flex-1 overflow-hidden">
-                    <div class="text-sm font-semibold text-white truncate px-1">${message}</div>
+                    <div class="text-sm font-bold text-white pr-2">${message}</div>
                 </div>
-                <button class="text-white/40 hover:text-white transition-colors ml-1 shrink-0">
-                    <i class="fas fa-times text-xs"></i>
+                <button class="lx-close-btn w-8 h-8 text-white/50 hover:text-white rounded-full ml-1 shrink-0">
+                    <i class="fas fa-times text-sm"></i>
                 </button>
             </div>
         `;
 
-        const gap = 16;
-        let topBase = 32;
+        const gap = 12;
+        let bottomBase = 32;
 
         document.body.appendChild(toast);
 
-        // Position stack
+        // Position stack (Bottom-up)
         const toasts = document.querySelectorAll('.toast-item');
-        toasts.forEach((el, idx) => {
+        toasts.forEach((el) => {
             if (el === toast) return;
             const h = el.offsetHeight;
-            const oldT = parseFloat(el.style.top || topBase);
-            const newT = oldT + h + gap;
-            el.style.top = `${newT}px`;
-            el.dataset.offset = newT;
+            const oldB = parseFloat(el.style.bottom || bottomBase);
+            const newB = oldB + h + gap;
+            el.style.bottom = `${newB}px`;
+            el.dataset.offset = newB;
         });
 
-        toast.style.top = `${topBase}px`;
-        toast.dataset.offset = topBase;
+        toast.style.bottom = `${bottomBase}px`;
+        toast.dataset.offset = bottomBase;
 
         const removeToast = () => {
             toast.classList.replace('lx-toast-in', 'opacity-0');
@@ -111,11 +134,11 @@
                 const h = toast.offsetHeight + gap;
                 toast.remove();
                 document.querySelectorAll('.toast-item').forEach(el => {
-                    const elT = parseFloat(el.style.top || 0);
-                    if (elT > currentOffset) {
-                        const newT = elT - h;
-                        el.style.top = `${newT}px`;
-                        el.dataset.offset = newT;
+                    const elB = parseFloat(el.style.bottom || 0);
+                    if (elB > currentOffset) {
+                        const newB = elB - h;
+                        el.style.bottom = `${newB}px`;
+                        el.dataset.offset = newB;
                     }
                 });
             }, 400);
@@ -148,6 +171,9 @@
             modal.innerHTML = `
                 <div class="absolute inset-0 bg-black/40 backdrop-blur-[4px]"></div>
                 <div class="lx-glass rounded-[28px] w-full max-w-sm overflow-hidden lx-modal-in relative shadow-2xl">
+                    <button id="modal-close-x" class="lx-close-btn absolute top-5 right-5 w-8 h-8 text-white/50 hover:text-white rounded-full z-10">
+                        <i class="fas fa-times text-sm"></i>
+                    </button>
                     <div class="p-8">
                         <div class="flex flex-col items-center text-center gap-5">
                             <div class="w-16 h-16 rounded-3xl bg-white/5 flex items-center justify-center ${iconClass} border border-white/10 mb-2">
@@ -211,6 +237,9 @@
             modal.innerHTML = `
                 <div class="absolute inset-0 bg-black/40 backdrop-blur-[4px]"></div>
                 <div class="lx-glass rounded-[28px] w-full max-w-sm overflow-hidden lx-modal-in relative shadow-2xl">
+                    <button id="modal-close-x" class="lx-close-btn absolute top-5 right-5 w-8 h-8 text-white/50 hover:text-white rounded-full z-10">
+                        <i class="fas fa-times text-sm"></i>
+                    </button>
                     <div class="p-8">
                         <div class="flex flex-col items-center text-center gap-5">
                             <div class="w-16 h-16 rounded-3xl bg-white/5 flex items-center justify-center text-emerald-400 border border-white/10">

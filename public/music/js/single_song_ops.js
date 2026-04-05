@@ -25,8 +25,7 @@ async function deleteSingleSong(songId) {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-user-name': username,
-                    'x-user-password': password
+                    ...getUserAuthHeaders()
                 },
                 body: JSON.stringify({
                     listId: activeListId,
@@ -121,11 +120,10 @@ async function requestServerLyricCache(song, quality = null, force = false) {
 
         // 2. 将歌词推送到服务器缓存接口
         const cacheUrl = `/api/music/cache/lyric`;
-        const headers = { 'Content-Type': 'application/json' };
-        const authToken = sessionStorage.getItem('lx_player_auth') || localStorage.getItem('lx_player_auth');
-        if (authToken) headers['x-user-token'] = authToken;
-        const username = (window.currentListData && window.currentListData.username) || localStorage.getItem('lx_sync_user') || '';
-        if (username) headers['x-user-name'] = username;
+        const headers = {
+            'Content-Type': 'application/json',
+            ...getUserAuthHeaders()
+        };
 
         // 构建包含音质信息的 songInfo
         const songInfoForCache = { ...song };

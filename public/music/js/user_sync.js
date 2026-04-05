@@ -184,28 +184,31 @@ class LocalClient {
         this.username = username;
         this.password = password;
         this.baseUrl = '/api/user';
-        this.headers = {
-            'Content-Type': 'application/json',
-            'x-user-name': username,
-            'x-user-password': password
-        };
     }
 
     async login() {
         try {
-            const res = await fetch(`${this.baseUrl}/verify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: this.username, password: this.password }) });
+            const res = await fetch(`${this.baseUrl}/verify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...getUserAuthHeaders() },
+                body: JSON.stringify({ username: this.username, password: this.password })
+            });
             const data = await res.json();
             return data.success;
         } catch (e) { return false; }
     }
 
     async getList() {
-        const res = await fetch(`${this.baseUrl}/list`, { headers: this.headers });
+        const res = await fetch(`${this.baseUrl}/list`, { headers: getUserAuthHeaders() });
         return await res.json();
     }
 
     async updateList(data) {
-        const res = await fetch(`${this.baseUrl}/list`, { method: 'POST', headers: this.headers, body: JSON.stringify(data) });
+        const res = await fetch(`${this.baseUrl}/list`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getUserAuthHeaders() },
+            body: JSON.stringify(data)
+        });
         return await res.json();
     }
 }
@@ -650,6 +653,12 @@ class RemoteClient {
 
         // Helper to send response (NO encryption, only compression)
         const sendResponse = async (response) => {
+            // [修复] 发送前必须检查连接状态，防止连接已关闭导致报错
+            if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+                console.warn('[Sync] 连接已断开，无法发送响应:', response.name);
+                return;
+            }
+
             // console.log('[RPC] 发送响应:', response.name, '错误:', response.error, '数据类型:', typeof response.data);
 
             // Step 1: Stringify

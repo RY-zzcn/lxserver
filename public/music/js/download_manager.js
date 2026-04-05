@@ -156,14 +156,25 @@ class DownloadManager {
     async checkTaskLyric(task) {
         if (!task || !task.isServer || task.status !== 'finished') return;
 
+        // [优化] 如果已经有结果，或者重试超过 3 次，则不再请求
+        if (task.hasLyric !== undefined || (task.lyricRetryCount || 0) >= 3) return;
+
         try {
+            // 记录重试次数
+            task.lyricRetryCount = (task.lyricRetryCount || 0) + 1;
+
             const song = task.song;
             const songId = song.songmid || song.songId || song.id;
             const url = `/api/music/cache/lyric?source=${song.source}&songmid=${song.songmid || ''}&songId=${song.id || ''}`;
 
-            const headers = {};
+            // [修复] 补全认证请求头
+            const headers = {
+                'Content-Type': 'application/json',
+                ...(window.getUserAuthHeaders ? window.getUserAuthHeaders() : {})
+            };
+
             const username = (window.currentListData && window.currentListData.username) || localStorage.getItem('lx_sync_user') || '';
-            if (username) headers['x-user-name'] = username;
+            if (username && !headers['x-user-name']) headers['x-user-name'] = username;
 
             const resp = await fetch(url, { headers });
             if (resp.ok) {
@@ -171,7 +182,8 @@ class DownloadManager {
             } else if (resp.status === 404) {
                 task.hasLyric = false;
             } else {
-                task.hasLyric = undefined; // 错误，重置状态下次再试
+                // 发生非 404 错误（如 401/500/网络错误）时才重置状态以便下次重试（受次数限制）
+                task.hasLyric = undefined;
             }
             this.renderTask(task);
             this.saveTasks();

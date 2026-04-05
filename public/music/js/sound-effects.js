@@ -111,6 +111,11 @@ window.soundEffects = (function () {
         // Store gains for control
         window._soundEffectsGains = { dry: dryGainNode, wet: wetGainNode };
 
+        // iOS: 在 analyser 之后接入后台保活流桥（仅 iOS 设备生效）
+        if (window.iOSBackgroundAudio) {
+            window.iOSBackgroundAudio.init(audioContext, analyser);
+        }
+
         // 3. Load Settings
         loadSettings();
         applySettings();
@@ -204,8 +209,7 @@ window.soundEffects = (function () {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-user-name': user,
-                    'x-user-password': pass
+                    ...getUserAuthHeaders()
                 },
                 body: JSON.stringify(payload)
             });
@@ -224,10 +228,7 @@ window.soundEffects = (function () {
 
         try {
             const res = await fetch('/api/user/sound-effects', {
-                headers: {
-                    'x-user-name': user,
-                    'x-user-password': pass
-                }
+                headers: getUserAuthHeaders()
             });
             if (res.ok) {
                 const data = await res.json();

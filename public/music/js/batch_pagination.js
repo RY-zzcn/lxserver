@@ -172,11 +172,7 @@ async function batchDeleteFromList() {
             // Call user-specific API endpoint
             const res = await fetch('/api/music/user/list/remove', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-user-name': username,
-                    'x-user-password': password
-                },
+                headers: getUserAuthHeaders(),
                 body: JSON.stringify({
                     listId: activeListId,
                     songIds: idsToDelete

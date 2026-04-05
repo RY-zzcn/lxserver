@@ -5,7 +5,7 @@
 <div align="center">
   <p>
     <img src="https://img.shields.io/badge/build-passing-brightgreen?style=flat-square" alt="Build Status">
-    <img src="https://img.shields.io/badge/version-v1.8.1-blue?style=flat-square" alt="Version">
+    <img src="https://img.shields.io/badge/version-v1.8.2-blue?style=flat-square" alt="Version">
     <img src="https://img.shields.io/badge/node-%3E%3D16-green?style=flat-square" alt="Node Version">
     <img src="https://img.shields.io/github/license/XCQ0607/lxserver?style=flat-square" alt="License">
     <br>
@@ -123,14 +123,45 @@ You can now run LX Music Sync Server more conveniently via our Desktop Client, a
 
 ### Option 2: Containerized Deployment via Docker
 
+This project supports pulling images from Docker Hub or GitHub Packages:
+- **Docker Hub**: `xcq0607/lxserver:latest`
+- **GitHub Packages**: `ghcr.io/xcq0607/lxserver:latest`
+
+**Docker Run Example:**
+
 ```bash
 docker run -d \
   -p 9527:9527 \
   -v $(pwd)/data:/server/data \
   -v $(pwd)/logs:/server/logs \
+  -v $(pwd)/cache:/server/cache \
   --name lx-sync-server \
   --restart unless-stopped \
-  ghcr.io/xcq0607/lxserver:latest
+  xcq0607/lxserver:latest
+```
+
+**Docker Compose Example:**
+
+Create a `docker-compose.yml` file:
+
+```yaml
+version: '3'
+services:
+  lx-sync-server:
+    image: xcq0607/lxserver:latest
+    container_name: lx-sync-server
+    restart: unless-stopped
+    ports:
+      - "9527:9527"
+    volumes:
+      - ./data:/server/data
+      - ./logs:/server/logs
+      - ./cache:/server/cache
+    environment:
+      - NODE_ENV=production
+      # - FRONTEND_PASSWORD=123456
+      # - ENABLE_WEBPLAYER_AUTH=true
+      # - WEBPLAYER_PASSWORD=yourpassword
 ```
 
 ### Option 3: Manual Run (Git Clone)
