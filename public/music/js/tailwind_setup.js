@@ -8,6 +8,13 @@ tailwind.config = {
     darkMode: 'class',
     theme: {
         extend: {
+            screens: {
+                // Shift all breakpoints up to accommodate iPad Pro Portrait (1024px) as mobile
+                'md': '1025px', // Desktop boundary
+                'lg': '1280px',
+                'xl': '1440px',
+                '2xl': '1536px',
+            },
             colors: {
                 // Override 'emerald' to use our CSS variables
                 // This allows us to change the theme without changing class names in HTML

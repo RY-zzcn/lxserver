@@ -3,37 +3,54 @@ import { debugRequest } from './env'
 import { requestMsg } from './message'
 import { bHh } from './musicSdk/options'
 import { deflateRaw } from 'zlib'
-import tunnel from 'tunnel'
+import * as tunnel from 'tunnel'
+
 
 const httpsRxp = /^https:/
 
 // Mock proxy config from global.lx.config if needed, or environment variables
-const getRequestAgent = url => {
-    let options
+const getRequestAgent = async url => {
     const config = global.lx?.config || {}
+    const proxyEnabled = config['proxy.all.enabled']
+    const proxyAddress = config['proxy.all.address']
 
-    if (config['proxy.enabled'] && config['bindIP']) { // Simplified check, extend as needed
-        // In actual lx-music data, proxy is stored differently. 
-        // For now, let's rely on process.env or just disable proxy if not strictly configured for music
-        // Or mapped from global.lx.config['proxy.*']
-    }
-
-    // For basic server usage, we might not need the complex proxy logic from the desktop app immediately
-    // unless the user explicitly configures it.
-
-    // Implementation of simple proxy if ENV provided
-    if (process.env.HTTPS_PROXY) {
-        const proxyUrl = new URL(process.env.HTTPS_PROXY)
-        options = {
-            proxy: {
-                host: proxyUrl.hostname,
-                port: proxyUrl.port,
-                proxyAuth: proxyUrl.username ? `${proxyUrl.username}:${proxyUrl.password}` : undefined
+    if (proxyEnabled && proxyAddress) {
+        try {
+            const proxyUrl = new URL(proxyAddress)
+            if (proxyUrl.protocol === 'http:' || proxyUrl.protocol === 'https:') {
+                const isHttps = httpsRxp.test(url)
+                const tunnelOptions = {
+                    proxy: {
+                        host: proxyUrl.hostname,
+                        port: proxyUrl.port,
+                        proxyAuth: proxyUrl.username ? `${proxyUrl.username}:${proxyUrl.password}` : undefined
+                    }
+                }
+                return (isHttps ? tunnel.httpsOverHttp : tunnel.httpOverHttp)(tunnelOptions)
+            } else if (proxyUrl.protocol.startsWith('socks')) {
+                const { SocksProxyAgent } = await import('socks-proxy-agent')
+                return new SocksProxyAgent(proxyAddress)
             }
+        } catch (e) {
+            // console.error('[Request] Invalid proxy address:', proxyAddress, e)
         }
     }
 
-    return options ? (httpsRxp.test(url) ? tunnel.httpsOverHttp : tunnel.httpOverHttp)(options) : undefined
+    if (process.env.HTTPS_PROXY) {
+        try {
+            const proxyUrl = new URL(process.env.HTTPS_PROXY)
+            const tunnelOptions = {
+                proxy: {
+                    host: proxyUrl.hostname,
+                    port: proxyUrl.port,
+                    proxyAuth: proxyUrl.username ? `${proxyUrl.username}:${proxyUrl.password}` : undefined
+                }
+            }
+            return (httpsRxp.test(url) ? tunnel.httpsOverHttp : tunnel.httpOverHttp)(tunnelOptions)
+        } catch (e) { }
+    }
+
+    return undefined
 }
 
 
@@ -254,7 +271,7 @@ const fetchData = async (url, method, {
         method,
         headers: Object.assign({}, defaultHeaders, headers),
         timeout,
-        agent: getRequestAgent(url),
+        agent: await getRequestAgent(url),
         json: format === 'json',
         rejectUnauthorized: false,
     }, (err, resp, body) => {

@@ -18,25 +18,25 @@
         }
     },
     {
-        "comment": "=== 版本更新 v1.8.2 ===",
-        "id": "update_v1_8_2",
+        "comment": "=== 版本更新 v1.8.3 ===",
+        "id": "update_v1_8_3",
         "status": "active",
         "type": "version",
         "logic": {
-            "target_version": "v1.8.2",
+            "target_version": "v1.8.3",
             "operator": "<",
             "interval_hours": 24
         },
         "ui": {
-            "title": "发现新版本 v1.8.2",
-            "date": "2026-04-03",
-            "message": "本次更新带来了以下升级：\n1. 🔑 安全与授权：新增 Token 管理面板，支持生成长期有效的 Token 用于 API 调用。\n2. 📱 iOS 播放修复：解决了 iOS 锁屏或后台切出时音频自动暂停的问题。 (#61)\n3. 🛰️ 客户端模式：支持每次登陆本地账户都会模拟客户端向远程服务器发起同步请求。\n4. 🚀 性能与修复：显著提升网页首屏加载速度，修复存储路径及模态框样式问题。",
+            "title": "发现新版本 v1.8.3",
+            "date": "2026-04-06",
+            "message": "本次更新带来了以下升级：\n1. 🌐 代理设置增强：新增自定义播放代理与 MusicSDK 代理 (热搜/歌单/排行)，提升网络访问稳定性。\n2. � 批量收藏：列表操作新增批量收藏功能，支持一次性收集多首歌曲 (#68)。\n3. ⚡ 性能优化：深度优化 CPU 占用与 WebDAV 同步逻辑，修复部分场景下的缓存错误 (#72, #65, #76)。\n4. 🍎 体验优化：增强 iOS 后台播放稳定性，并对后端管理控制台 UI 进行了细节打磨。\n5. 📱 移动端适配：优化平板竖屏 UI 布局，提升移动端使用体验。",
             "confirm_text": "立即查看",
             "cancel_text": "稍后提醒"
         },
         "action": {
             "type": "link",
-            "url": "https://github.com/XCQ0607/lxserver/releases/tag/v1.8.2"
+            "url": "https://github.com/XCQ0607/lxserver/releases/tag/v1.8.3"
         }
     }
 ]

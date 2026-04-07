@@ -61,7 +61,7 @@ const envParamKeys = Object.values(ENV_PARAMS).filter(v => v != 'LX_USER_')
 
 const dataPath = envParams.DATA_PATH ?? path.join(__dirname, '../data')
 const saveConfigToFile = () => {
-  const configPath = path.join(process.cwd(), 'config.js')
+  const configPath = process.env.CONFIG_PATH || path.join(process.cwd(), 'config.js')
   const content = `module.exports = ${JSON.stringify(global.lx.config, null, 2)}`
   try {
     fs.writeFileSync(configPath, content)
@@ -197,6 +197,12 @@ if (envParams.DISABLE_TELEMETRY) {
 }
 if (envParams.ENABLE_PUBLIC_USER_RESTRICTION) {
   global.lx.config['user.enablePublicRestriction'] = envParams.ENABLE_PUBLIC_USER_RESTRICTION === 'true'
+}
+if (envParams.PROXY_ALL_ENABLED) {
+  global.lx.config['proxy.all.enabled'] = envParams.PROXY_ALL_ENABLED === 'true'
+}
+if (envParams.PROXY_ALL_ADDRESS) {
+  global.lx.config['proxy.all.address'] = envParams.PROXY_ALL_ADDRESS
 }
 
 if (envUsers.length) {
@@ -351,7 +357,7 @@ if (webdavSync.isConfigured()) {
       console.log('Data restored from WebDAV successfully')
 
       // 1. 重新从磁盘加载最新的 config.js 到内存 (解决实时生效问题)
-      const configPath = path.join(process.cwd(), 'config.js')
+      const configPath = process.env.CONFIG_PATH || path.join(process.cwd(), 'config.js')
       if (fs.existsSync(configPath)) {
         console.log('Reloading config.js after WebDAV restore...')
         // 清除 node require 缓存以强制重载
@@ -411,7 +417,7 @@ if (!fs.existsSync(openDir)) {
 startServer(global.lx.config.port, global.lx.config.bindIP)
 
 // 监控 config.js 变动以实现热重载 (由于 nodemon 已忽略该文件)
-const rootConfigPath = path.join(process.cwd(), 'config.js')
+const rootConfigPath = process.env.CONFIG_PATH || path.join(process.cwd(), 'config.js')
 if (fs.existsSync(rootConfigPath)) {
   let debounceTimer: NodeJS.Timeout | null = null
   fs.watch(rootConfigPath, (event) => {

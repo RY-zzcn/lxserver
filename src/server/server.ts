@@ -23,6 +23,7 @@ import { initUserApis, callUserApiGetMusicUrl, isSourceSupported, getLoadedApis 
 import * as customSourceHandlers from './customSourceHandlers'
 import * as fileCache from './fileCache'
 import crypto from 'node:crypto'
+import needle from 'needle'
 const { MusicTagger, MetaPicture } = require('music-tag-native')
 
 // ===== Player Session Store =====
@@ -245,12 +246,11 @@ setInterval(() => {
   for (const [token, session] of userSessions) {
     if (now - session.createdAt > USER_SESSION_TTL) userSessions.delete(token)
   }
-  // 清理加载到内存的过期 API Token
-  for (const [token, username] of persistentTokens) {
-    const config = getUserTokenConfig(username)
-    const t = config.tokens.find(tk => tk.token === token)
-    if (!t || (t.expiresAt && t.expiresAt <= now)) {
+  // 清理加载到内存的过期 API Token（直接走内存 meta，不读磁盘）
+  for (const [token, meta] of persistentTokenMeta) {
+    if (meta.expiresAt && meta.expiresAt <= now) {
       persistentTokens.delete(token)
+      persistentTokenMeta.delete(token)
     }
   }
 }, 60 * 60 * 1000)
@@ -560,6 +560,18 @@ const serveStatic = (req: IncomingMessage, res: http.ServerResponse, filePath: s
 
 const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Promise((resolve, reject) => {
   const httpServer = http.createServer(async (req, res) => {
+    // CORS 跨域处理
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS')
+    res.setHeader('Access-Control-Allow-Headers', '*')
+    res.setHeader('Access-Control-Allow-Private-Network', 'true')
+
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204)
+      res.end()
+      return
+    }
+
     const ip = getIP(req)
     accessLog.info(`${req.method} ${req.url} from ${ip}`)
     // console.log(req.url)
@@ -1093,6 +1105,47 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
             console.error('[UserAPI] 批量删除失败:', err)
             res.writeHead(500)
             res.end(err.message || '删除失败')
+          }
+        })
+        return
+      }
+
+      // [新增] Batch Add Songs to List (User Auth)
+      if (pathname === '/api/music/user/list/add' && req.method === 'POST') {
+        const username = verifyUserAuth(req)
+        if (!username) {
+          res.writeHead(401, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ success: false, message: '需要用户认证' }))
+          return
+        }
+
+        void readBody(req).then(async body => {
+          try {
+            const { listId, musicInfos, location = 'bottom' } = JSON.parse(body)
+
+            if (!listId || !Array.isArray(musicInfos)) {
+              res.writeHead(400)
+              res.end('参数错误:需要listId和musicInfos数组')
+              return
+            }
+
+            console.log(`[UserAPI] 批量添加请求: 用户=${username}, 列表=${listId}, 添加歌曲数=${musicInfos.length}`)
+
+            const userSpace = getUserSpace(username)
+
+            // Add songs to the list
+            await userSpace.listManage.listDataManage.listMusicAdd(listId, musicInfos, location)
+
+            // Create new snapshot to persist changes
+            const newSnapshotKey = await userSpace.listManage.createSnapshot()
+            console.log(`[UserAPI] 批量添加成功,已创建新快照: ${newSnapshotKey}`)
+
+            res.writeHead(200)
+            res.end('添加成功')
+          } catch (err: any) {
+            console.error('[UserAPI] 批量添加失败:', err)
+            res.writeHead(500)
+            res.end(err.message || '添加失败')
           }
         })
         return
@@ -2042,6 +2095,11 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
         let username = '_open'
 
         if (!isPublic) {
+          // <img src> 无法携带自定义请求头，允许从 URL ?token= 参数读取 Token 作为补偿
+          const urlToken = urlObj.searchParams.get('token')
+          if (urlToken && !req.headers['x-user-token']) {
+            (req.headers as any)['x-user-token'] = urlToken
+          }
           const verified = verifyUserAuth(req)
           if (!verified) {
             res.writeHead(401)
@@ -2131,7 +2189,7 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
             throw new Error('Source not supported')
           }
 
-          console.log('[Lyric] Fetching lyric for:', source, songmid)
+          // console.log('[Lyric] Fetching lyric for:', source, songmid)
 
           // Construct complete songInfo object for SDK compatibility
           // KuGou (kg) needs: name, hash, interval
@@ -2889,8 +2947,8 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
               try {
                 // Only try to resolve if it looks like a remote URL and is not already resolved
                 if (result.url.startsWith('http')) {
-                  console.log(`[MusicUrl] Resolving redirects for: ${songInfo.name} (${quality})`);
-                  const needle = require('needle')
+                  // console.log(`[MusicUrl] Resolving redirects for: ${songInfo.name} (${quality})`);
+
                   const checkRedirect = async (u: string, depth: number = 0): Promise<string> => {
                     if (depth > 3) return u // Max depth 3
                     try {
@@ -2903,16 +2961,16 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
                           'Referer': new URL(u).origin
                         }
                       })
-                      if ([301, 302, 303, 307, 308].includes(resp.statusCode) && resp.headers.location) {
+                      if (resp.statusCode && [301, 302, 303, 307, 308].includes(resp.statusCode) && resp.headers.location) {
                         let nextUrl = resp.headers.location
                         if (!nextUrl.startsWith('http')) {
                           try { nextUrl = new URL(nextUrl, u).href } catch (e) { }
                         }
-                        console.log(`[MusicUrl] Resolve redirect [${resp.statusCode}]: ${u.substring(0, 50)}... -> ${nextUrl.substring(0, 50)}...`)
+                        // console.log(`[MusicUrl] Resolve redirect [${resp.statusCode}]: ${u.substring(0, 50)}... -> ${nextUrl.substring(0, 50)}...`)
                         return checkRedirect(nextUrl, depth + 1)
                       }
                       // If error status but not redirect, return original
-                      if (resp.statusCode >= 400) {
+                      if (resp.statusCode !== undefined && resp.statusCode >= 400) {
                         console.warn(`[MusicUrl] Redirect check failed with status ${resp.statusCode}, using original URL`);
                         return u;
                       }
@@ -2926,7 +2984,7 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
                   if (finalUrl !== result.url) {
                     result.url = finalUrl
                   }
-                  console.log(`[MusicUrl] Final Resolved URL: ${result.url.substring(0, 100)}...`);
+                  // console.log(`[MusicUrl] Final Resolved URL: ${result.url.substring(0, 100)}...`);
                 }
               } catch (e) {
                 console.error('[MusicUrl] Resolve Error:', e)
@@ -2988,7 +3046,7 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
             return
           }
 
-          console.log(`[HotSearch] 获取热搜: source=${source}`)
+          // console.log(`[HotSearch] 获取热搜: source=${source}`)
           const result = await musicSdk[source].hotSearch.getList()
 
           res.writeHead(200, {
@@ -3397,6 +3455,8 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
             'webdav.username': global.lx.config['webdav.username'] || '',
             'webdav.password': global.lx.config['webdav.password'] || '',
             'sync.interval': global.lx.config['sync.interval'] || 60,
+            'proxy.all.enabled': global.lx.config['proxy.all.enabled'] || false,
+            'proxy.all.address': global.lx.config['proxy.all.address'] || '',
           }
           res.writeHead(200, {
             'Content-Type': 'application/json',
@@ -3448,6 +3508,8 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
               if (newConfig['webdav.username'] !== undefined) global.lx.config['webdav.username'] = newConfig['webdav.username']
               if (newConfig['webdav.password'] !== undefined) global.lx.config['webdav.password'] = newConfig['webdav.password']
               if (newConfig['sync.interval'] !== undefined) global.lx.config['sync.interval'] = parseInt(newConfig['sync.interval'])
+              if (newConfig['proxy.all.enabled'] !== undefined) global.lx.config['proxy.all.enabled'] = newConfig['proxy.all.enabled']
+              if (newConfig['proxy.all.address'] !== undefined) global.lx.config['proxy.all.address'] = newConfig['proxy.all.address']
 
               // 更新 WebDAVSync 配置
               if (global.lx.webdavSync && (newConfig['webdav.url'] || newConfig['webdav.username'] || newConfig['webdav.password'] || newConfig['sync.interval'])) {
@@ -3459,7 +3521,7 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
                 })
               }
 
-              const configPath = path.join(process.cwd(), 'config.js')
+              const configPath = process.env.CONFIG_PATH || path.join(process.cwd(), 'config.js')
               const configContent = `module.exports = ${JSON.stringify({
                 serverName: global.lx.config.serverName,
                 'proxy.enabled': global.lx.config['proxy.enabled'],
@@ -3476,6 +3538,8 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
                 'webdav.username': global.lx.config['webdav.username'],
                 'webdav.password': global.lx.config['webdav.password'],
                 'sync.interval': global.lx.config['sync.interval'],
+                'proxy.all.enabled': global.lx.config['proxy.all.enabled'],
+                'proxy.all.address': global.lx.config['proxy.all.address'],
                 users: global.lx.config.users.map(u => ({
                   name: u.name,
                   password: u.password,
@@ -3499,6 +3563,59 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
           })
           return
         }
+      }
+
+      // Test Proxy API
+      if (pathname === '/api/config/test-proxy' && req.method === 'POST') {
+        const auth = req.headers['x-frontend-auth']
+        if (auth !== global.lx.config['frontend.password']) {
+          res.writeHead(401)
+          res.end('Unauthorized')
+          return
+        }
+
+        void readBody(req).then(async body => {
+          try {
+            const { address } = JSON.parse(body)
+            if (!address) throw new Error('Missing address')
+
+            const url = new URL(address)
+            const options: any = {
+              timeout: 10000,
+              headers: {
+                'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36'
+              }
+            }
+
+            if (url.protocol === 'http:' || url.protocol === 'https:') {
+              options.proxy = address
+            } else if (url.protocol.startsWith('socks')) {
+              const { SocksProxyAgent } = await import('socks-proxy-agent')
+              options.agent = new SocksProxyAgent(address)
+            } else {
+              throw new Error('Unsupported protocol: ' + url.protocol)
+            }
+
+            console.log(`[Proxy Test] Trying to connect to baidu.com via ${address}...`)
+            const startTime = Date.now()
+            needle.get('https://www.baidu.com', options, (err: Error | null, resp: any) => {
+              const duration = Date.now() - startTime
+              if (err) {
+                console.error('[Proxy Test] Failed:', err.message)
+                res.writeHead(200, { 'Content-Type': 'application/json' })
+                res.end(JSON.stringify({ success: false, message: err.message }))
+              } else {
+                console.log(`[Proxy Test] Success: ${resp.statusCode} (${duration}ms)`)
+                res.writeHead(200, { 'Content-Type': 'application/json' })
+                res.end(JSON.stringify({ success: true, message: `连接成功 (状态码: ${resp.statusCode}, 耗时: ${duration}ms)` }))
+              }
+            })
+          } catch (err: any) {
+            res.writeHead(200, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ success: false, message: err.message }))
+          }
+        })
+        return
       }
 
       // Logs API
@@ -4309,6 +4426,10 @@ export const startServer = async (port: number, ip: string) => {
   // if (status.status) await handleStopServer()
 
   startupLog.info(`starting sync server in ${process.env.NODE_ENV == 'production' ? 'production' : 'development'}`)
+  const proxyEnabled = global.lx.config['proxy.all.enabled']
+  const proxyAddress = global.lx.config['proxy.all.address']
+  console.log(`[Proxy] Music SDK Proxy: ${proxyEnabled ? `Enabled (${proxyAddress})` : 'Disabled'}`)
+  startupLog.info(`Music SDK Proxy: ${proxyEnabled ? `Enabled (${proxyAddress})` : 'Disabled'}`)
   try {
     await musicSdk.init()
     startupLog.info('musicSdk initialized')

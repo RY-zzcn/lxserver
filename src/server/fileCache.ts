@@ -251,7 +251,7 @@ export const checkCache = (songInfo: any, username?: string, includeTmp = false)
                     continue
                 }
 
-                console.log(`[FileCache] Probing potential match: ${file} (ext: ${ext})`)
+                // console.log(`[FileCache] Probing potential match: ${file} (ext: ${ext})`)
 
                 const fileNameWithoutExt = file.substring(0, lastDotIndex)
 
@@ -276,7 +276,7 @@ export const checkCache = (songInfo: any, username?: string, includeTmp = false)
                         continue;
                     }
 
-                    console.log(`[FileCache] HIT match: ${file} in ${userDir}`)
+                    // console.log(`[FileCache] HIT match: ${file} in ${userDir}`)
                     const filePath = path.join(dirPath, file)
                     matchedFiles.push({
                         exists: true,

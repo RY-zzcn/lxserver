@@ -119,14 +119,19 @@ function deselectAll() {
 }
 
 function updateBatchToolbar() {
+    const size = window.selectedItems.size;
+
+    // 搜索页计数
     const countEl = document.getElementById('batch-selected-count');
-    if (countEl) {
-        countEl.textContent = window.selectedItems.size;
-    }
+    if (countEl) countEl.textContent = size;
+
+    // 歌单详情页计数
     const slCountEl = document.getElementById('sl-batch-selected-count');
-    if (slCountEl) {
-        slCountEl.textContent = window.selectedItems.size;
-    }
+    if (slCountEl) slCountEl.textContent = size;
+
+    // 排行榜计数
+    const lbCountEl = document.getElementById('lb-batch-selected-count');
+    if (lbCountEl) lbCountEl.textContent = size;
 
     const deleteBtn = document.getElementById('batch-delete-btn');
     if (deleteBtn) {
@@ -368,12 +373,32 @@ function loadSettings() {
     }
 }
 
+
+async function handleBatchCollect() {
+    const selectedCount = window.selectedItems.size;
+    if (selectedCount === 0) {
+        if (typeof showInfo === 'function') showInfo('请先选择歌曲');
+        else alert('请先选择歌曲');
+        return;
+    }
+
+    const musicInfos = Array.from(window.selectedSongObjects.values());
+
+    // 复用 app.js 中的歌单选择弹窗
+    if (typeof openPlaylistAddModal === 'function') {
+        openPlaylistAddModal(musicInfos);
+    } else {
+        showError('收藏组件未就绪');
+    }
+}
+
 // Export functions to window
 window.handleBatchSelect = handleBatchSelect;
 window.toggleBatchMode = toggleBatchMode;
 window.selectAllVisible = selectAllVisible;
 window.deselectAll = deselectAll;
 window.batchDeleteFromList = batchDeleteFromList;
+window.handleBatchCollect = handleBatchCollect;
 window.goToPage = goToPage;
 window.nextPage = nextPage;
 window.prevPage = prevPage;

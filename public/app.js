@@ -1313,6 +1313,12 @@ class App {
             form.elements['list.addMusicLocationType'].value = config['list.addMusicLocationType'] || 'top';
             form.elements['proxy.enabled'].checked = config['proxy.enabled'] || false;
             form.elements['proxy.header'].value = config['proxy.header'] || '';
+            if (form.elements['proxy.all.enabled']) {
+                form.elements['proxy.all.enabled'].checked = config['proxy.all.enabled'] || false;
+            }
+            if (form.elements['proxy.all.address']) {
+                form.elements['proxy.all.address'].value = config['proxy.all.address'] || '';
+            }
             if (form.elements['user.enablePath']) {
                 form.elements['user.enablePath'].checked = config['user.enablePath'] !== false;
             }
@@ -1359,6 +1365,8 @@ class App {
             'list.addMusicLocationType': formData.get('list.addMusicLocationType'),
             'proxy.enabled': formData.get('proxy.enabled') === 'on',
             'proxy.header': formData.get('proxy.header'),
+            'proxy.all.enabled': formData.get('proxy.all.enabled') === 'on',
+            'proxy.all.address': formData.get('proxy.all.address'),
             'user.enablePath': formData.get('user.enablePath') === 'on',
             'user.enableRoot': formData.get('user.enableRoot') === 'on',
             'user.enablePublicRestriction': formData.get('user.enablePublicRestriction') === 'on',
@@ -1475,6 +1483,30 @@ class App {
             }
         } catch (err) {
             showError('❌ 连接失败: ' + err.message);
+        }
+    }
+
+    async testProxy() {
+        const address = document.querySelector('input[name="proxy.all.address"]').value;
+        if (!address) {
+            showInfo('请输入代理地址');
+            return;
+        }
+
+        showInfo('正在测试代理，请稍候...');
+        try {
+            const result = await this.request('/api/config/test-proxy', {
+                method: 'POST',
+                body: JSON.stringify({ address })
+            });
+
+            if (result.success) {
+                showSuccess('✅ ' + result.message);
+            } else {
+                showError('❌ ' + result.message);
+            }
+        } catch (err) {
+            showError('❌ 测试失败: ' + err.message);
         }
     }
 
@@ -1935,6 +1967,7 @@ class App {
         document.getElementById('restore-webdav-btn')?.addEventListener('click', () => this.restoreFromWebDAV());
         document.getElementById('sync-files-btn')?.addEventListener('click', () => this.syncFilesToWebDAV());
         document.getElementById('refresh-sync-logs-btn')?.addEventListener('click', () => this.loadSyncLogs());
+        document.getElementById('test-proxy-btn')?.addEventListener('click', () => this.testProxy());
 
         // [新增] 本地备份/还原事件绑定
         document.getElementById('backup-local-btn')?.addEventListener('click', () => this.downloadLocalBackup());

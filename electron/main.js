@@ -20,27 +20,43 @@ if (!gotTheLock) {
     })
 }
 
-// ─── 路径配置加载逻辑 ─────────────────────────────────────────────────────────
+// ─── 配置加载逻辑 ─────────────────────────────────────────────────────────
 const defaultStorageRoot = app.getPath('userData')
 const basePathConfigFile = path.join(defaultStorageRoot, 'base_path.json')
 
-function getStoredPath() {
+function getAppConfig() {
     try {
         if (fs.existsSync(basePathConfigFile)) {
-            const data = JSON.parse(fs.readFileSync(basePathConfigFile, 'utf8'))
-            if (data.storagePath && fs.existsSync(data.storagePath)) {
-                return data.storagePath
-            }
+            const content = fs.readFileSync(basePathConfigFile, 'utf8')
+            return content ? JSON.parse(content) : {}
         }
     } catch (_) { }
+    return {}
+}
+
+function updateAppConfig(newConfig) {
+    try {
+        const config = getAppConfig()
+        const merged = { ...config, ...newConfig }
+        if (!fs.existsSync(defaultStorageRoot)) fs.mkdirSync(defaultStorageRoot, { recursive: true })
+        fs.writeFileSync(basePathConfigFile, JSON.stringify(merged))
+    } catch (e) { console.error('Save config failed:', e) }
+}
+
+function getStoredPath() {
+    const data = getAppConfig()
+    if (data.storagePath && fs.existsSync(data.storagePath)) {
+        return data.storagePath
+    }
     return null
 }
 
 function saveStoredPath(newPath) {
-    try {
-        if (!fs.existsSync(defaultStorageRoot)) fs.mkdirSync(defaultStorageRoot, { recursive: true })
-        fs.writeFileSync(basePathConfigFile, JSON.stringify({ storagePath: newPath }))
-    } catch (e) { console.error('Save path config failed:', e) }
+    updateAppConfig({ storagePath: newPath })
+}
+
+if (getAppConfig().disableAcceleration) {
+    app.disableHardwareAcceleration()
 }
 
 // ─── 核心状态 ──────────────────────────────────────────────────────────────
@@ -67,6 +83,7 @@ async function startServer() {
     const logsDir = path.join(storageRoot, 'logs')
     process.env.DATA_PATH = dataDir
     process.env.LOG_PATH = logsDir
+    process.env.CONFIG_PATH = path.join(storageRoot, 'config.js')
 
         ;[dataDir, logsDir].forEach(d => { try { fs.mkdirSync(d, { recursive: true }) } catch (_) { } })
 
@@ -181,6 +198,32 @@ function createTray() {
             label: '设置与管理',
             submenu: [
                 {
+                    label: '开机自动运行',
+                    type: 'checkbox',
+                    checked: app.getLoginItemSettings().openAtLogin,
+                    click: (item) => {
+                        app.setLoginItemSettings({ openAtLogin: item.checked })
+                    }
+                },
+                {
+                    label: '启动时不显示主界面 (最小化到托盘)',
+                    type: 'checkbox',
+                    checked: !!getAppConfig().silentStart,
+                    click: (item) => {
+                        updateAppConfig({ silentStart: item.checked })
+                    }
+                },
+                {
+                    label: '关闭硬件加速 (需重启生效)',
+                    type: 'checkbox',
+                    checked: !!getAppConfig().disableAcceleration,
+                    click: (item) => {
+                        updateAppConfig({ disableAcceleration: item.checked })
+                        dialog.showMessageBox({ type: 'info', title: '提示', message: '更改硬件加速设置需要重启软件才能生效。' })
+                    }
+                },
+                { type: 'separator' },
+                {
                     label: '更换存储位置...',
                     click: () => {
                         const result = dialog.showOpenDialogSync({
@@ -188,8 +231,47 @@ function createTray() {
                             properties: ['openDirectory', 'createDirectory']
                         })
                         if (result && result[0]) {
-                            saveStoredPath(result[0])
-                            app.relaunch(); app.exit()
+                            const newPath = result[0]
+                            if (newPath === storageRoot) return
+
+                            // 询问用户是否迁移
+                            const choice = dialog.showMessageBoxSync({
+                                type: 'question',
+                                title: '是否迁移数据?',
+                                message: '您改变了存储位置，是否需要将原有的数据(包含您的配置、用户的收藏列表)一起迁移到新目录下？\n\n【说明】：迁移后将自动删除旧目录中的数据文件。',
+                                buttons: ['迁移原有数据', '仅使用新目录 (当做新空服务端)', '取消']
+                            })
+
+                            if (choice === 2) return // 取消
+
+                            if (choice === 0) { // 迁移
+                                try {
+                                    const itemsToMove = ['data', 'logs', 'config.js']
+                                    itemsToMove.forEach(item => {
+                                        const src = path.join(storageRoot, item)
+                                        const dest = path.join(newPath, item)
+                                        if (fs.existsSync(src)) {
+                                            fs.cpSync(src, dest, { recursive: true })
+                                            // 复制成功后删除旧文件
+                                            fs.rmSync(src, { recursive: true, force: true })
+                                        }
+                                    })
+                                } catch (err) {
+                                    dialog.showMessageBoxSync({
+                                        type: 'error',
+                                        title: '迁移遇到问题',
+                                        message: `迁移时部分文件被系统占用导致无法被移动或删除，请后续手动去旧目录检查拷贝或删除残余文件。\n\n具体错误: ${err.message}`
+                                    })
+                                }
+                            }
+
+                            saveStoredPath(newPath)
+                            if (process.env.PORTABLE_EXECUTABLE_FILE) {
+                                app.relaunch({ execPath: process.env.PORTABLE_EXECUTABLE_FILE })
+                            } else {
+                                app.relaunch()
+                            }
+                            app.exit()
                         }
                     }
                 },
@@ -199,7 +281,16 @@ function createTray() {
             ]
         },
         { type: 'separator' },
-        { label: '重启软件', click: () => { app.relaunch(); app.exit() } },
+        {
+            label: '重启软件', click: () => {
+                if (process.env.PORTABLE_EXECUTABLE_FILE) {
+                    app.relaunch({ execPath: process.env.PORTABLE_EXECUTABLE_FILE })
+                } else {
+                    app.relaunch()
+                }
+                app.exit()
+            }
+        },
         { label: '完全退出', click: () => { app.isQuiting = true; app.quit() } },
     ])
     tray.setContextMenu(menu)
@@ -233,8 +324,10 @@ app.whenReady().then(async () => {
     if (process.platform === 'darwin' && app.dock) app.dock.hide()
     createTray()
 
-    // 启动时打开播放器
-    showPlayerWindow()
+    // 启动时根据配置决定是否显示主界面
+    if (!getAppConfig().silentStart) {
+        showPlayerWindow()
+    }
 })
 
 // 托盘 App 重写退出逻辑

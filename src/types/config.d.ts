@@ -123,6 +123,16 @@ declare namespace LX {
     'player.password'?: string
 
     /**
+     * 是否启用针对所有外发请求的代理 (目前主要用于 Music SDK)
+     */
+    'proxy.all.enabled'?: boolean
+
+    /**
+     * 代理地址 (支持 http:// 或 socks5://)
+     */
+    'proxy.all.address'?: string
+
+    /**
      * 是否禁用数据收集
      */
     disableTelemetry?: boolean

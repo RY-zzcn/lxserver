@@ -35,6 +35,10 @@ const config: LX.Config = {
   'player.enableAuth': false,
   'player.password': '123456',
 
+  // 代理配置
+  'proxy.all.enabled': false,
+  'proxy.all.address': '',
+
 }
 
 export default config

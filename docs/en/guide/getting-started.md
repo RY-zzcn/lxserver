@@ -33,31 +33,37 @@ For desktop users, we strongly recommend using the **Desktop Client** based on E
 
 ### Option 2: Containerized Deployment Based on Docker Engine 
 
-We provide pre-built stable image versions for various architectural platforms. Execute the following single-line command to start the container service instance within the daemon process model:
+This project supports pulling images from Docker Hub or GitHub Packages:
+- **Docker Hub**: `xcq0607/lxserver:latest`
+- **GitHub Packages**: `ghcr.io/xcq0607/lxserver:latest`
+
+Execute the following command to start the container:
 
 ```bash
 docker run -d \
   -p 9527:9527 \
   -v $(pwd)/data:/server/data \
   -v $(pwd)/logs:/server/logs \
+  -v $(pwd)/cache:/server/cache \
   --name lx-sync-server \
   --restart unless-stopped \
-  ghcr.io/xcq0607/lxserver:latest
+  xcq0607/lxserver:latest
 ```
 
 **Container Volume Mappings:**
 
-- `-v $(pwd)/data:/server/data`: This configuration is a **core mandatory item**. It is responsible for exporting all application-layer state data generated within the instance (covering user profile assets, independent authentication source files, and stream segment cache pools) to the host for persistent storage. Missing this mapping item will lead to catastrophic data loss during container reconstruction.
-- `-v $(pwd)/logs:/server/logs`: A physical mount point used to receive and output all graded audit logs of the service application layer.
+- `-v $(pwd)/data:/server/data`: This configuration is a **core mandatory item**. It is responsible for exporting all application-layer state data generated within the instance to the host for persistent storage.
+- `-v $(pwd)/logs:/server/logs`: A physical mount point used to receive and output all graded audit logs of the service.
+- `-v $(pwd)/cache:/server/cache`: Used to store music cache files, significantly improving loading speed during repeated playback.
 
 **Declarative Docker Compose:**
 For standardized long-term management in production implementation, create a definition configuration named `docker-compose.yml`:
 
 ```yaml
-version: '3.8'
+version: '3'
 services:
-  lxserver:
-    image: ghcr.io/xcq0607/lxserver:latest
+  lx-sync-server:
+    image: xcq0607/lxserver:latest
     container_name: lx-sync-server
     restart: unless-stopped
     ports:
@@ -65,10 +71,12 @@ services:
     volumes:
       - ./data:/server/data
       - ./logs:/server/logs
+      - ./cache:/server/cache
     environment:
-      - PORT=9527
-      - FRONTEND_PASSWORD=123456
-      - DISABLE_TELEMETRY=false
+      - NODE_ENV=production
+      # - FRONTEND_PASSWORD=123456
+      # - ENABLE_WEBPLAYER_AUTH=true
+      # - WEBPLAYER_PASSWORD=yourpassword
 ```
 
 After reviewing the configuration correctly, start the infrastructure instance set with the command `docker-compose up -d`.

@@ -33,31 +33,37 @@
 
 ### 方案二：基于 Docker 引擎的容器化部署
 
-我们提供了适用于各种架构平台的预构建稳定镜像版本。执行以下单行指令即可启动守护进程模型内的容器服务实例：
+本项目支持从 Docker Hub 或 GitHub Packages 拉取镜像：
+- **Docker Hub**: `xcq0607/lxserver:latest`
+- **GitHub Packages**: `ghcr.io/xcq0607/lxserver:latest`
+
+执行以下指令启动容器：
 
 ```bash
 docker run -d \
   -p 9527:9527 \
   -v $(pwd)/data:/server/data \
   -v $(pwd)/logs:/server/logs \
+  -v $(pwd)/cache:/server/cache \
   --name lx-sync-server \
   --restart unless-stopped \
-  ghcr.io/xcq0607/lxserver:latest
+  xcq0607/lxserver:latest
 ```
 
 **容器挂载卷 (Volume Mappings) ：**
 
-- `-v $(pwd)/data:/server/data`：该项配置为**核心必选项**。负责将实例内生成的所有应用层状态数据（涵盖用户档案资产、独立认证源文件以及流分片缓存池）导出宿主机持久保存。缺失此映射项将导致容器重构时的灾难性数据丢失。
+- `-v $(pwd)/data:/server/data`：该项配置为**核心必选项**。负责将实例内生成的所有应用层状态数据导出宿主机持久保存。
 - `-v $(pwd)/logs:/server/logs`：用于承接并输出服务应用层所有分级审计日志的物理挂载点。
+- `-v $(pwd)/cache:/server/cache`：用于存放音乐缓存文件，极大提升重复播放时的加载速度。
 
 **声明式 Docker Compose ：**
 针对需标准化长久管理的生产实施，创建名为 `docker-compose.yml` 的定义配置：
 
 ```yaml
-version: '3.8'
+version: '3'
 services:
-  lxserver:
-    image: ghcr.io/xcq0607/lxserver:latest
+  lx-sync-server:
+    image: xcq0607/lxserver:latest
     container_name: lx-sync-server
     restart: unless-stopped
     ports:
@@ -65,10 +71,12 @@ services:
     volumes:
       - ./data:/server/data
       - ./logs:/server/logs
+      - ./cache:/server/cache
     environment:
-      - PORT=9527
-      - FRONTEND_PASSWORD=123456
-      - DISABLE_TELEMETRY=false
+      - NODE_ENV=production
+      # - FRONTEND_PASSWORD=123456
+      # - ENABLE_WEBPLAYER_AUTH=true
+      # - WEBPLAYER_PASSWORD=yourpassword
 ```
 
 配置审查无误后，通过指令 `docker-compose up -d` 启动基础架构实例集。

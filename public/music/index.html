@@ -208,7 +208,7 @@
         }
 
         /* Centered origin for mobile */
-        @media (max-width: 768px) {
+        @media (max-width: 1024px) {
             .lyric-line {
                 transform-origin: center center;
                 margin: 0 auto;
@@ -890,7 +890,7 @@
                     <!-- Search Results Container -->
                     <div
                         class="flex-1 t-bg-panel rounded-2xl shadow-sm border t-border-main overflow-hidden flex flex-col">
-                        <!-- Batch Toolbar (Hidden by default) -->
+                        <!-- Batch Toolbar (Hidden by default) 搜索/我的收藏批量操作 -->
                         <div id="batch-toolbar"
                             class="hidden bg-emerald-50 border-b border-emerald-200 p-3 flex items-center justify-between">
                             <div class="flex items-center gap-3">
@@ -904,6 +904,11 @@
                                     class="text-xs px-3 py-1 t-bg-panel border border-red-300 rounded hover:bg-red-50 text-red-600 transition-colors">退出</button>
                             </div>
                             <div class="flex items-center gap-2">
+                                <button onclick="handleBatchCollect()"
+                                    class="text-xs px-2 md:px-4 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded transition-colors"
+                                    title="批量收藏">
+                                    <i class="fas fa-folder-plus md:mr-1"></i><span class="hidden md:inline">批量收藏</span>
+                                </button>
                                 <button onclick="batchDownloadFromList()"
                                     class="text-xs px-2 md:px-4 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
                                     title="批量下载">
@@ -1166,7 +1171,7 @@
                                     </div>
                                 </div>
                             </div>
-
+                            <!-- 歌单批量操作 -->
                             <div id="sl-batch-toolbar"
                                 class="hidden bg-emerald-50 border-b border-emerald-200 p-3 flex items-center justify-between">
                                 <div class="flex items-center gap-3">
@@ -1180,6 +1185,12 @@
                                         class="text-xs px-3 py-1 t-bg-panel border border-red-300 rounded hover:bg-red-50 text-red-600 transition-colors">退出</button>
                                 </div>
                                 <div class="flex items-center gap-2">
+                                    <button onclick="handleBatchCollect()"
+                                        class="text-xs px-2 md:px-4 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded transition-colors"
+                                        title="批量收藏">
+                                        <i class="fas fa-folder-plus md:mr-1"></i><span
+                                            class="hidden md:inline">批量收藏</span>
+                                    </button>
                                     <button onclick="batchDownloadFromList()"
                                         class="text-xs px-2 md:px-4 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
                                         title="批量下载">
@@ -1337,7 +1348,7 @@
                                 <i class="fas fa-spinner fa-spin text-emerald-500 text-xl"></i>
                             </div>
                             <div id="lb-boards-list" class="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-0.5"
-                                onclick="if(window.innerWidth < 768) toggleLbSidebar(false)">
+                                onclick="if(window.innerWidth <= 1024) toggleLbSidebar(false)">
                                 <!-- 榜单项由 JS 注入 -->
                                 <div class="p-4 text-center t-text-muted text-sm animate-pulse">
                                     <i class="fas fa-spinner fa-spin"></i>
@@ -1355,6 +1366,7 @@
                             <!-- ... (批量操作和搜索过滤维持原样) ... -->
                             <!-- 此处为了代码简洁，保留原有逻辑，仅外层容器调整 -->
                             <!-- 批量操作工具栏 -->
+                            <!-- 排行榜批量操 -->
                             <div id="lb-batch-toolbar"
                                 class="hidden bg-emerald-50 dark:bg-emerald-900/20 border-b border-emerald-200 dark:border-emerald-800 p-3 flex items-center justify-between flex-shrink-0">
                                 <div class="flex items-center gap-3">
@@ -1368,6 +1380,12 @@
                                         class="text-xs px-3 py-1 t-bg-panel border border-red-300 rounded hover:bg-red-50 text-red-600 transition-colors">退出</button>
                                 </div>
                                 <div class="flex items-center gap-2">
+                                    <button onclick="handleBatchCollect()"
+                                        class="text-xs px-2 md:px-4 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded transition-colors"
+                                        title="批量收藏">
+                                        <i class="fas fa-folder-plus md:mr-1"></i><span
+                                            class="hidden md:inline">批量收藏</span>
+                                    </button>
                                     <button onclick="batchDownloadFromList()"
                                         class="text-xs px-2 md:px-4 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
                                         title="批量下载">
@@ -1698,6 +1716,43 @@
                                                 class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-emerald-500 transition-all">
                                             </div>
                                         </label>
+                                    </div>
+
+                                    <!-- 启用自定义代理 -->
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <div class="text-sm font-bold t-text-main flex items-center">
+                                                自定义代理 (Custom Proxy)
+                                                <span class="setting-tooltip-trigger ml-1">
+                                                    <i class="fas fa-question-circle"></i>
+                                                    <span
+                                                        class="setting-tooltip-content">开启后，当自动代理触发时，将优先使用您填写的自定义代理地址（客户端直接请求），而非服务器中转。<br>URL
+                                                        格式示例：<code>https://proxy.example.com/{url}</code><br>其中
+                                                        <code>{url}</code> 将被替换为原始音乐链接（不编码）。需同时开启"自动代理"才生效。</span>
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" id="toggle-custom-proxy" class="sr-only peer"
+                                                onchange="updateSetting('enableCustomProxy', this.checked)">
+                                            <div
+                                                class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500 transition-all">
+                                            </div>
+                                        </label>
+                                    </div>
+
+                                    <!-- 自定义代理URL输入框 (动态显示) -->
+                                    <div id="custom-proxy-url-row" class="hidden">
+                                        <input type="url" id="custom-proxy-url-input"
+                                            placeholder="https://proxy.example.com/{url}"
+                                            class="w-full px-3 py-2 border t-border-main rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 t-bg-main t-text-main"
+                                            onchange="updateSetting('customProxyUrl', this.value.trim())"
+                                            oninput="updateSetting('customProxyUrl', this.value.trim())">
+                                        <p class="text-[11px] t-text-muted mt-1.5 leading-relaxed">
+                                            <i class="fas fa-info-circle text-emerald-500 mr-1"></i>使用 <code
+                                                class="bg-gray-100 dark:bg-gray-800 px-1 rounded">{url}</code>
+                                            作为原始链接占位符，将被直接替换为原始音乐 URL（不编码）。
+                                        </p>
                                     </div>
 
                                     <!-- 缓存并发量设置 -->
@@ -2895,7 +2950,7 @@
                                                     Tab)</span>
                                                 <span
                                                     class="t-bg-track px-2 py-0.5 rounded-md font-mono border t-border-main">Alt
-                                                    + 1-4</span>
+                                                    + 1-6</span>
                                             </div>
                                             <div class="flex justify-between items-center"><span>歌词页开关 (Lyrics)</span>
                                                 <span
@@ -3032,7 +3087,7 @@
                 class="w-full md:w-[500px] lg:w-[600px] flex-1 min-h-0 md:flex-none md:h-full md:max-h-[70vh] flex flex-col relative transition-all duration-300 flex-shrink-0">
                 <!-- Song Info -->
                 <div class="mb-4 md:mb-8 text-center md:text-left px-4 md:pl-6 select-none transition-all duration-300 cursor-pointer"
-                    onclick="if(window.innerWidth < 768) { toggleDetailCover(); event.stopPropagation(); }">
+                    onclick="if(window.innerWidth <= 1024) { toggleDetailCover(); event.stopPropagation(); }">
                     <div id="detail-title-container" class="overflow-hidden whitespace-nowrap mb-1">
                         <div id="detail-title"
                             class="inline-block text-2xl md:text-4xl font-black t-text-main drop-shadow-sm max-w-full truncate w-fit mx-auto md:mx-0">

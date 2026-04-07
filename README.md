@@ -8,7 +8,7 @@
   <h1>LX Sync Server</h1> -->
   <p>
     <img src="https://img.shields.io/badge/build-passing-brightgreen?style=flat-square" alt="Build Status">
-    <img src="https://img.shields.io/badge/version-v1.8.2-blue?style=flat-square" alt="Version">
+    <img src="https://img.shields.io/badge/version-v1.8.3-blue?style=flat-square" alt="Version">
     <img src="https://img.shields.io/badge/node-%3E%3D16-green?style=flat-square" alt="Node Version">
     <img src="https://img.shields.io/github/license/XCQ0607/lxserver?style=flat-square" alt="License">
     <br>
@@ -237,6 +237,8 @@ npm start
 | `DISABLE_TELEMETRY`              | `disableTelemetry`             | 是否禁用匿名数据统计，系统更新提示以及系统公告提示              | `false`          |
 | `ENABLE_PUBLIC_USER_RESTRICTION` | `user.enablePublicRestriction` | 是否启用公开用户权限限制 (限制上传、删除公开源、缓存到服务器等) | `true`           |
 | `LIST_ADD_MUSIC_LOCATION_TYPE`   | `list.addMusicLocationType`    | 添加歌曲到列表时的位置 (`top` / `bottom`)                       | `top`            |
+| `PROXY_ALL_ENABLED`               | `proxy.all.enabled`             | 是否启用外发请求代理 (针对 Music SDK)                            | `false`          |
+| `PROXY_ALL_ADDRESS`               | `proxy.all.address`             | 代理地址 (支持 http:// 或 socks5://)                           | -                  |
 | `LX_USER_<用户名>`                 | `users` 数组                   | 快速添加用户，值为该用户的密码 (如 `LX_USER_test=123`)        | -                  |
 
 > **提示**：目前服务支持 `启用根路径` (URL配置为 `ip:port`) 和 `启用用户路径` (URL配置为 `ip:port/username`) 两种数据同步连接方式。如果没有启用用户路径，则必须保证每一个同步用户的鉴权密码不重复。

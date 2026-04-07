@@ -473,11 +473,18 @@ function toggleLbBatchMode() {
 function lbSelectAll() {
     if (!window.batchMode || !window.LeaderboardManager) return;
 
-    const songs = window.LeaderboardManager.getCurrentList();
-    if (!songs || songs.length === 0) return;
+    const allSongs = window.LeaderboardManager.getCurrentList();
+    if (!allSongs || allSongs.length === 0) return;
+
+    // --- 逻辑对齐：当开启“仅显示匹配项”过滤时，全选应仅针对匹配项 ---
+    let songsToOperate = allSongs;
+    if (window.ListSearch && window.ListSearch.state.active &&
+        window.ListSearch.state.id === 'leaderboard' && window.ListSearch.state.onlyShowMatches) {
+        songsToOperate = window.ListSearch.getDisplayList(allSongs).map(obj => obj.item);
+    }
 
     let isAllSelected = true;
-    for (const song of songs) {
+    for (const song of songsToOperate) {
         if (!window.selectedItems.has(String(song.id))) {
             isAllSelected = false;
             break;
@@ -485,9 +492,9 @@ function lbSelectAll() {
     }
 
     if (isAllSelected) {
-        songs.forEach(song => window.handleBatchSelect(String(song.id), false));
+        songsToOperate.forEach(song => window.handleBatchSelect(String(song.id), false));
     } else {
-        songs.forEach(song => window.handleBatchSelect(String(song.id), true));
+        songsToOperate.forEach(song => window.handleBatchSelect(String(song.id), true));
     }
 }
 

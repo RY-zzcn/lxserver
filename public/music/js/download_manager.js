@@ -361,15 +361,22 @@ class DownloadManager {
             const result = await resolveSongUrl(task.song, quality, true, true);
             if (!result || !result.url) throw new Error('解析失败');
 
+
+            let rawUrl = result.url;
+            if (rawUrl.startsWith('/api/music/download')) {
+                const proxyParams = new URLSearchParams(rawUrl.includes('?') ? rawUrl.split('?')[1] : '');
+                const extracted = proxyParams.get('url');
+                if (extracted) rawUrl = decodeURIComponent(extracted);
+            }
+            if (!rawUrl.startsWith('http')) throw new Error('无法获取有效的外部下载地址');
+
             // 2. Post to backend
-            const headers = { 'Content-Type': 'application/json' };
-            const username = (window.currentListData && window.currentListData.username) || localStorage.getItem('lx_sync_user') || '';
-            if (username) headers['x-user-name'] = username;
+            const headers = { 'Content-Type': 'application/json', ...(window.getUserAuthHeaders ? window.getUserAuthHeaders() : {}) };
 
             const res = await fetch('/api/music/cache/download', {
                 method: 'POST',
                 headers,
-                body: JSON.stringify({ songInfo: task.song, url: result.url, quality })
+                body: JSON.stringify({ songInfo: task.song, url: rawUrl, quality })
             });
 
             if (!res.ok) throw new Error('服务器拒绝缓存');
@@ -404,13 +411,7 @@ class DownloadManager {
             task.quality = quality;
             this.renderTask(task);
 
-            const headers = { 'Content-Type': 'application/json' };
-            const authToken = sessionStorage.getItem('lx_player_auth');
-            if (authToken) headers['x-user-token'] = authToken;
-            const username = (window.currentListData && window.currentListData.username) || localStorage.getItem('lx_sync_user') || '';
-            if (username) {
-                headers['x-user-name'] = username;
-            }
+            const headers = { 'Content-Type': 'application/json', ...(window.getUserAuthHeaders ? window.getUserAuthHeaders() : {}) };
 
             // Fetch the resolving URL
             const resolveRes = await fetch('/api/music/url', {
@@ -588,10 +589,8 @@ class DownloadManager {
         if (task.isServer) {
             // 云端任务：通知后端停止，并更新本地状态
             if (task.status === 'downloading' || task.status === 'waiting') {
-                const username = (window.currentListData && window.currentListData.username) || localStorage.getItem('lx_sync_user') || '';
                 const songKey = task.id.replace(/^server_(batch_)?/, '');
-                const headers = { 'Content-Type': 'application/json' };
-                if (username) headers['x-user-name'] = username;
+                const headers = { 'Content-Type': 'application/json', ...(window.getUserAuthHeaders ? window.getUserAuthHeaders() : {}) };
 
                 fetch('/api/music/cache/stop', {
                     method: 'POST',
@@ -637,16 +636,21 @@ class DownloadManager {
                     const result = await resolveSongUrl(task.song, quality, true, true);
                     if (!result || !result.url) throw new Error('获取播放地址失败');
 
-                    const headers = { 'Content-Type': 'application/json' };
-                    const authToken = sessionStorage.getItem('lx_player_auth');
-                    if (authToken) headers['x-user-token'] = authToken;
-                    const username = (window.currentListData && window.currentListData.username) || localStorage.getItem('lx_sync_user') || '';
-                    if (username) headers['x-user-name'] = username;
+                    // [Fix] 还原代理 URL 为原始外部 URL
+                    let rawUrl = result.url;
+                    if (rawUrl.startsWith('/api/music/download')) {
+                        const proxyParams = new URLSearchParams(rawUrl.includes('?') ? rawUrl.split('?')[1] : '');
+                        const extracted = proxyParams.get('url');
+                        if (extracted) rawUrl = decodeURIComponent(extracted);
+                    }
+                    if (!rawUrl.startsWith('http')) throw new Error('无法获取有效的外部下载地址');
+
+                    const headers = { 'Content-Type': 'application/json', ...(window.getUserAuthHeaders ? window.getUserAuthHeaders() : {}) };
 
                     const res = await fetch('/api/music/cache/download', {
                         method: 'POST',
                         headers,
-                        body: JSON.stringify({ songInfo: task.song, url: result.url, quality })
+                        body: JSON.stringify({ songInfo: task.song, url: rawUrl, quality })
                     });
                     if (!res.ok) throw new Error('服务器拒绝请求');
 
@@ -670,10 +674,8 @@ class DownloadManager {
         if (task) {
             if (task.isServer && (task.status === 'downloading' || task.status === 'waiting')) {
                 // 云端任务：通知后端停止
-                const username = (window.currentListData && window.currentListData.username) || localStorage.getItem('lx_sync_user') || '';
                 const songKey = task.id.replace(/^server_(batch_)?/, '');
-                const headers = { 'Content-Type': 'application/json' };
-                if (username) headers['x-user-name'] = username;
+                const headers = { 'Content-Type': 'application/json', ...(window.getUserAuthHeaders ? window.getUserAuthHeaders() : {}) };
 
                 fetch('/api/music/cache/stop', {
                     method: 'POST',
@@ -738,16 +740,21 @@ class DownloadManager {
                         const result = await resolveSongUrl(t.song, quality, true, true);
                         if (!result || !result.url) throw new Error('获取地址失败');
 
-                        const headers = { 'Content-Type': 'application/json' };
-                        const authToken = sessionStorage.getItem('lx_player_auth');
-                        if (authToken) headers['x-user-token'] = authToken;
-                        const username = (window.currentListData && window.currentListData.username) || localStorage.getItem('lx_sync_user') || '';
-                        if (username) headers['x-user-name'] = username;
+                        // [Fix] 还原代理 URL 为原始外部 URL
+                        let rawUrl = result.url;
+                        if (rawUrl.startsWith('/api/music/download')) {
+                            const proxyParams = new URLSearchParams(rawUrl.includes('?') ? rawUrl.split('?')[1] : '');
+                            const extracted = proxyParams.get('url');
+                            if (extracted) rawUrl = decodeURIComponent(extracted);
+                        }
+                        if (!rawUrl.startsWith('http')) throw new Error('无法获取有效的外部下载地址');
+
+                        const headers = { 'Content-Type': 'application/json', ...(window.getUserAuthHeaders ? window.getUserAuthHeaders() : {}) };
 
                         const res = await fetch('/api/music/cache/download', {
                             method: 'POST',
                             headers,
-                            body: JSON.stringify({ songInfo: t.song, url: result.url, quality })
+                            body: JSON.stringify({ songInfo: t.song, url: rawUrl, quality })
                         });
                         if (!res.ok) throw new Error('服务器拒绝缓存');
 
