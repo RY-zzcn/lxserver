@@ -20,6 +20,8 @@ export const ENV_PARAMS = [
   'ENABLE_PUBLIC_USER_RESTRICTION',
   'PROXY_ALL_ENABLED',
   'PROXY_ALL_ADDRESS',
+  'ADMIN_PATH',
+  'PLAYER_PATH',
   'LX_USER_',
 ] as const
 

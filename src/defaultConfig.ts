@@ -39,6 +39,10 @@ const config: LX.Config = {
   'proxy.all.enabled': false,
   'proxy.all.address': '',
 
+  // 访问路径配置
+  'admin.path': '', // 后台管理路径，默认为根路径 /
+  'player.path': '/music', // 播放器路径
+
 }
 
 export default config

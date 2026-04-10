@@ -1645,6 +1645,14 @@ class App {
             if (form.elements['sync.interval']) {
                 form.elements['sync.interval'].value = config['sync.interval'] || 60;
             }
+
+            // URL路径配置
+            if (form.elements['admin.path']) {
+                form.elements['admin.path'].value = config['admin.path'] ?? '';
+            }
+            if (form.elements['player.path']) {
+                form.elements['player.path'].value = config['player.path'] ?? '/music';
+            }
         } catch (err) {
             console.error('Failed to load config:', err);
         }
@@ -1653,6 +1661,31 @@ class App {
     async saveConfig() {
         const form = document.getElementById('config-form');
         const formData = new FormData(form);
+
+        // 路径校验
+        const adminPath = (formData.get('admin.path') || '').trim();
+        const playerPath = (formData.get('player.path') || '').trim();
+        const errEl = document.getElementById('path-conflict-error');
+        let pathError = '';
+
+        if (!playerPath) {
+            pathError = '⚠️ 播放器路径不能为空';
+        } else if (!playerPath.startsWith('/')) {
+            pathError = '⚠️ 播放器路径必须以 / 开头';
+        } else if (adminPath !== '' && !adminPath.startsWith('/')) {
+            pathError = '⚠️ 后台路径必须以 / 开头（或留空表示根路径）';
+        } else if ((adminPath || '/') === playerPath) {
+            pathError = '⚠️ 后台管理路径与播放器路径不能相同';
+        } else if (adminPath.startsWith('/api') || playerPath.startsWith('/api')) {
+            pathError = '⚠️ 路径不能以 /api 开头（与 API 路由冲突）';
+        }
+
+        if (errEl) {
+            errEl.textContent = pathError;
+            errEl.style.display = pathError ? 'block' : 'none';
+        }
+        if (pathError) return;
+
         const config = {
             serverName: formData.get('serverName'),
             maxSnapshotNum: parseInt(formData.get('maxSnapshotNum')),
@@ -1671,6 +1704,8 @@ class App {
             'webdav.username': formData.get('webdav.username'),
             'webdav.password': formData.get('webdav.password'),
             'sync.interval': parseInt(formData.get('sync.interval')) || 60,
+            'admin.path': adminPath,
+            'player.path': playerPath,
         };
 
         try {
@@ -1684,6 +1719,10 @@ class App {
                 this.password = config['frontend.password'];
                 localStorage.setItem('lx_auth', config['frontend.password']);
             }
+
+            // 更新侧边栏播放器链接
+            const navPlayerLink = document.getElementById('nav-player-link');
+            if (navPlayerLink) navPlayerLink.href = playerPath || '/music';
 
             if (res.warning) {
                 showInfo('配置保存成功！\n\n⚠️ 警告：' + res.warning);

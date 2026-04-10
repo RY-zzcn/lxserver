@@ -136,6 +136,16 @@ declare namespace LX {
      * 是否禁用数据收集
      */
     disableTelemetry?: boolean
+
+    /**
+     * 后台管理界面访问路径，默认为空字符串（表示根路径 /）
+     */
+    'admin.path'?: string
+
+    /**
+     * Web播放器访问路径，默认为 /music
+     */
+    'player.path'?: string
   }
 }
 

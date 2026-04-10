@@ -2124,7 +2124,7 @@
                                         <span class="leading-tight">重置所有设置 (Reset Settings)</span>
                                     </button>
 
-                                    <button onclick="location.href='/'"
+                                    <button onclick="goToAdmin()"
                                         class="w-full py-2.5 px-4 bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white font-bold rounded-lg transition-all duration-300 border border-emerald-100 flex items-center justify-center gap-3 text-center mt-3">
                                         <i class="fas fa-tasks flex-shrink-0"></i>
                                         <span class="leading-tight">后台管理 (Backend Management)</span>
@@ -4611,6 +4611,12 @@
             </div>
         </div>
     </div>
+    <script>
+        function goToAdmin() {
+            var adminPath = (window.CONFIG && window.CONFIG['admin.path']) || '';
+            location.href = adminPath || '/';
+        }
+    </script>
 </body>
 
 </html>

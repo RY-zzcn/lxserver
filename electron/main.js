@@ -67,6 +67,10 @@ let tray = null
 let playerWindow = null  // 播放器窗口（常驻，关闭只隐藏）
 let adminWindow = null   // 管理后台窗口（可正常关闭）
 
+// 自定义路径（启动后通过 fetchServerPaths() 更新）
+let PLAYER_PATH_CONFIG = '/music'
+let ADMIN_PATH_CONFIG = ''
+
 const appRoot = app.getAppPath()
 const staticPath = app.isPackaged
     ? path.join(appRoot + '.unpacked', 'public')
@@ -117,10 +121,28 @@ function getIcon(name) {
     return null
 }
 
+/** 从服务器读取自定义路径配置（/js/config.js 端点已动态注入路径字段） */
+async function fetchServerPaths() {
+    try {
+        const res = await fetch(`${BASE_URL}/js/config.js`)
+        const text = await res.text()
+        // 解析 window.CONFIG = {...};
+        const match = text.match(/window\.CONFIG\s*=\s*(\{[\s\S]*?\});/)
+        if (match) {
+            const cfg = JSON.parse(match[1])
+            if (cfg['player.path']) PLAYER_PATH_CONFIG = cfg['player.path']
+            if (cfg['admin.path'] !== undefined) ADMIN_PATH_CONFIG = cfg['admin.path']
+            console.log(`[Path Config] player: ${PLAYER_PATH_CONFIG}, admin: ${ADMIN_PATH_CONFIG || '/'}`)
+        }
+    } catch (e) {
+        console.error('fetchServerPaths failed:', e)
+    }
+}
+
 
 // ─── 播放器窗口管理（常驻，关闭只隐藏，保持音乐播放） ──────────────────────────
 function showPlayerWindow() {
-    const playerURL = `${BASE_URL}/music`
+    const playerURL = `${BASE_URL}${PLAYER_PATH_CONFIG || '/music'}`
 
     if (!playerWindow || playerWindow.isDestroyed()) {
         playerWindow = new BrowserWindow({
@@ -156,7 +178,7 @@ function showPlayerWindow() {
 
 // ─── 管理后台窗口管理（独立窗口，不影响播放器） ────────────────────────────────
 function showAdminWindow() {
-    const adminURL = BASE_URL
+    const adminURL = ADMIN_PATH_CONFIG ? `${BASE_URL}${ADMIN_PATH_CONFIG}` : BASE_URL
 
     if (!adminWindow || adminWindow.isDestroyed()) {
         adminWindow = new BrowserWindow({
@@ -321,6 +343,8 @@ app.whenReady().then(async () => {
     }
 
     await startServer()
+    // 延迟一下再读取路径配置，绉公服务器完全启动
+    setTimeout(() => fetchServerPaths(), 3000)
     if (process.platform === 'darwin' && app.dock) app.dock.hide()
     createTray()
 

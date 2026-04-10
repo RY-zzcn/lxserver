@@ -647,41 +647,72 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
     const urlObj = new URL(req.url ?? '', `http://${req.headers.host}`)
     const pathname = urlObj.pathname
 
-    // Serve Music Player Static Files
-    if (pathname.startsWith('/music')) {
-      // 白名单：登录页、静态资源无需认证
-      const isLoginPage = pathname === '/music/login' || pathname === '/music/login.html'
-      const isPublicAsset = pathname.startsWith('/music/assets/') ||
-        pathname.startsWith('/music/css/') ||
-        pathname.startsWith('/music/js/') ||
-        pathname === '/music/manifest.json' ||
-        pathname === '/music/sw.js'
+    // 读取路径配置（每次请求都重新读取，保存后立刻生效）
+    // 读取路径配置（每次请求都重新读取，保存后立刻生效）
+    const normalizePath = (p: string) => (p || '').replace(/\/+$/, '')
+    const playerPath = global.lx.config['player.path'] || '/music'
+    const adminPath = global.lx.config['admin.path'] || ''
 
-      // 认证检查：仅对主页面（非白名单）进行保护
+    // 映射播放器逻辑 (无论是自定义路径还是前端硬编码的 /music/)
+    const isPlayerRequest = pathname.startsWith(playerPath + '/') || pathname === playerPath
+
+    // 修复：只兼容旧版硬编码引用的静态资源，不再兼容打开 /music 页面本身，这样/music就无法作为网页直接打开了
+    const isLegacyPlayerAsset = playerPath !== '/music' && (
+      pathname.startsWith('/music/assets/') ||
+      pathname.startsWith('/music/css/') ||
+      pathname.startsWith('/music/js/') ||
+      pathname.startsWith('/music/fonts/') ||
+      pathname.startsWith('/music/img/') ||
+      pathname === '/music/manifest.json' ||
+      pathname === '/music/sw.js'
+    )
+
+    if (isPlayerRequest || isLegacyPlayerAsset) {
+      const activePrefix = isPlayerRequest ? playerPath : '/music'
+      // 白名单：登录页、静态资源无需认证
+      const isLoginPage = pathname === `${activePrefix}/login` || pathname === `${activePrefix}/login.html`
+      const isPublicAsset = pathname.startsWith(`${activePrefix}/assets/`) ||
+        pathname.startsWith(`${activePrefix}/css/`) ||
+        pathname.startsWith(`${activePrefix}/js/`) ||
+        pathname.startsWith(`${activePrefix}/fonts/`) ||
+        pathname.startsWith(`${activePrefix}/img/`) ||
+        pathname === `${activePrefix}/manifest.json` ||
+        pathname === `${activePrefix}/sw.js` ||
+        isLegacyPlayerAsset
+
+      // 认证检查
       if (!isLoginPage && !isPublicAsset && global.lx.config['player.enableAuth']) {
         if (!checkPlayerAuth(req)) {
-          res.writeHead(302, { 'Location': '/music/login' })
+          res.writeHead(302, { 'Location': `${playerPath}/login` })
           res.end()
           return
         }
       }
 
-      // Defaults to index.html if exactly /music or /music/
+      // 规范化物理路径
       let targetPath = pathname
-      if (pathname === '/music' || pathname === '/music/') {
+      // 将请求路径中的前缀映射到真实的 /music 物理目录
+      const subPath = pathname.slice(activePrefix.length)
+      if (subPath === '' || subPath === '/') {
         targetPath = '/music/index.html'
       } else if (isLoginPage) {
         targetPath = '/music/login.html'
+      } else {
+        targetPath = '/music' + subPath
       }
-      // public/music/xxx
-      // global.lx.staticPath points to `public`
+
       const filePath = path.join(global.lx.staticPath, targetPath)
-      serveStatic(req, res, filePath)
-      return
+      if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+        serveStatic(req, res, filePath)
+        return
+      }
     }
 
-    // [修正] 增强映射根路径 / 到后端管理界面
-    if (pathname === '/' || pathname === '/index.html') {
+    // [管理界面]
+    const effectiveAdminPath = adminPath || '/'
+    const isAdminPath = (pathname === effectiveAdminPath || pathname === effectiveAdminPath + '/' || pathname === effectiveAdminPath + '/index.html')
+
+    if (isAdminPath) {
       const rootHtmlPath = path.join(global.lx.staticPath, 'index.html')
       if (fs.existsSync(rootHtmlPath)) {
         serveStatic(req, res, rootHtmlPath)
@@ -689,9 +720,19 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
       }
     }
 
-    // [新增] 全局静态文件兜底 (处理根目录下的 style.css, app.js, icon.svg 等)
+    // [全局静态文件兜底] 
+    // 注意：如果设置了 adminPath，则不允许通过 / 直接访问后台资源文件，除非它是公共资源
     if (!pathname.startsWith('/api/')) {
       const generalFilePath = path.join(global.lx.staticPath, pathname)
+      // 禁止绕过 adminPath 直接访问后台 index.html
+      if (pathname === '/' || pathname === '/index.html') {
+        if (adminPath !== '') {
+          res.writeHead(404)
+          res.end('Not Found')
+          return
+        }
+      }
+
       if (fs.existsSync(generalFilePath) && fs.statSync(generalFilePath).isFile()) {
         serveStatic(req, res, generalFilePath)
         return
@@ -728,6 +769,8 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
         'player.enableAuth': global.lx.config['player.enableAuth'] || false,
         port: global.lx.config.port,
         bindIP: global.lx.config.bindIP,
+        'admin.path': global.lx.config['admin.path'] ?? '',
+        'player.path': global.lx.config['player.path'] ?? '/music',
       }
 
       const configJs = `window.CONFIG = ${JSON.stringify(frontendConfig, null, 2)};`
@@ -3599,6 +3642,8 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
             'sync.interval': global.lx.config['sync.interval'] || 60,
             'proxy.all.enabled': global.lx.config['proxy.all.enabled'] || false,
             'proxy.all.address': global.lx.config['proxy.all.address'] || '',
+            'admin.path': global.lx.config['admin.path'] ?? '',
+            'player.path': global.lx.config['player.path'] ?? '/music',
           }
           res.writeHead(200, {
             'Content-Type': 'application/json',
@@ -3653,6 +3698,37 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
               if (newConfig['proxy.all.enabled'] !== undefined) global.lx.config['proxy.all.enabled'] = newConfig['proxy.all.enabled']
               if (newConfig['proxy.all.address'] !== undefined) global.lx.config['proxy.all.address'] = newConfig['proxy.all.address']
 
+              // URL路径配置校验与更新
+              if (newConfig['admin.path'] !== undefined || newConfig['player.path'] !== undefined) {
+                const adminPath = (newConfig['admin.path'] !== undefined ? newConfig['admin.path'] : global.lx.config['admin.path']) || ''
+                const playerPath = (newConfig['player.path'] !== undefined ? newConfig['player.path'] : global.lx.config['player.path']) || '/music'
+                const normalizedAdmin = adminPath.replace(/\/+$/, '')
+                const normalizedPlayer = playerPath.replace(/\/+$/, '')
+
+                if (!normalizedPlayer || !normalizedPlayer.startsWith('/')) {
+                  res.writeHead(422, { 'Content-Type': 'application/json' })
+                  res.end(JSON.stringify({ success: false, error: '播放器路径不能为空且必须以 / 开头' }))
+                  return
+                }
+                if (normalizedAdmin !== '' && !normalizedAdmin.startsWith('/')) {
+                  res.writeHead(422, { 'Content-Type': 'application/json' })
+                  res.end(JSON.stringify({ success: false, error: '后台路径必须以 / 开头或为空' }))
+                  return
+                }
+                if ((normalizedAdmin || '/') === normalizedPlayer) {
+                  res.writeHead(422, { 'Content-Type': 'application/json' })
+                  res.end(JSON.stringify({ success: false, error: '后台管理路径与播放器路径不能相同' }))
+                  return
+                }
+                if (normalizedAdmin.startsWith('/api') || normalizedPlayer.startsWith('/api')) {
+                  res.writeHead(422, { 'Content-Type': 'application/json' })
+                  res.end(JSON.stringify({ success: false, error: '路径不能以 /api 开头' }))
+                  return
+                }
+                global.lx.config['admin.path'] = normalizedAdmin
+                global.lx.config['player.path'] = normalizedPlayer
+              }
+
               // 更新 WebDAVSync 配置
               if (global.lx.webdavSync && (newConfig['webdav.url'] || newConfig['webdav.username'] || newConfig['webdav.password'] || newConfig['sync.interval'])) {
                 global.lx.webdavSync.updateConfig({
@@ -3682,6 +3758,8 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
                 'sync.interval': global.lx.config['sync.interval'],
                 'proxy.all.enabled': global.lx.config['proxy.all.enabled'],
                 'proxy.all.address': global.lx.config['proxy.all.address'],
+                'admin.path': global.lx.config['admin.path'] ?? '',
+                'player.path': global.lx.config['player.path'] ?? '/music',
                 users: global.lx.config.users.map(u => ({
                   name: u.name,
                   password: u.password,
@@ -4334,6 +4412,13 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
         void authCode(req, res, global.lx.config.users, targetUserName)
         break
       default:
+        // 如果设置了独立后台路径，兜底拦截根目录访问请求
+        if (global.lx.config['admin.path'] && (pathname === '/' || pathname === '/index.html')) {
+          code = 404
+          msg = 'Not Found'
+          break
+        }
+
         // Serve static files
         // If root, serve index.html
         let filePath = path.join(process.cwd(), 'public', pathname === '/' ? 'index.html' : pathname)
