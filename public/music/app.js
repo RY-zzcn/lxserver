@@ -72,6 +72,7 @@ const DEFAULT_SETTINGS = {
     enableAutoProxy: true, // 自动代理
     enableCustomProxy: false, // 是否启用自定义代理
     customProxyUrl: '', // 自定义代理URL模板，使用 {url} 作为原始URL占位符
+    enableOnlyDownloadMode: false, // 仅下载模式
     downloadConcurrency: 3, // 缓存并发量 (1-6)
     hotSearchLimit: 20, // 热搜显示数量
     lyricFontSize: 1.25, // 歌词字体大小 (rem)
@@ -90,6 +91,7 @@ const DEFAULT_SETTINGS = {
     enableAutoSwitchSource: true, // 自动尝试换源 (默认开启)
     enableAutoSkipOnError: true, // 失败自动下一曲 (默认开启)
     enablePreloader: true, // 预读机制 (默认开启)
+    enableSmtcLyric: true, // SMTC 歌词显示 (默认开启)
     // Visualizer Settings (Refactored)
     showFooterVisualizer: true,
     footerVisualizerStyle: 'bars',
@@ -956,7 +958,10 @@ window.clearQueue = clearQueue;
 
 // Search Logic
 function handleSearchKeyPress(e) {
-    if (e.key === 'Enter') doSearch();
+    if (e.key === 'Enter') {
+        if (typeof hideSearchSuggestions === 'function') hideSearchSuggestions();
+        doSearch();
+    }
 }
 
 /**
@@ -1002,6 +1007,9 @@ const SOURCES = ['kw', 'kg', 'tx', 'wy', 'mg'];
 
 //搜索歌曲
 async function doSearch(page = 1, append = false) {
+    // 触发搜索时隐藏联想词
+    if (typeof hideSearchSuggestions === 'function') hideSearchSuggestions();
+
     // 只有在开启全新搜索（第一页且非追加模式）时才重置局部过滤状态
     if (window.ListSearch && page === 1 && !append) window.ListSearch.resetState();
 
@@ -1494,7 +1502,7 @@ function renderResults(list) {
 
         row.innerHTML = `
             <!-- Index -->
-            <div class="col-span-2 sm:col-span-1 text-center font-mono t-text-muted text-xs md:text-sm flex items-center justify-center">
+            <div class="col-span-1 text-center font-mono t-text-muted text-xs md:text-sm flex items-center justify-center">
                 ${window.batchMode ? `
                     <input type="checkbox" 
                            class="batch-checkbox w-4 h-4 text-emerald-600 rounded" 
@@ -1505,7 +1513,7 @@ function renderResults(list) {
             </div>
 
             <!-- Title (Image + Text) -->
-            <div class="col-span-8 sm:col-span-7 md:col-span-6 ${titleLgSpan} flex items-center overflow-hidden pr-2">
+            <div class="col-span-9 sm:col-span-7 md:col-span-6 ${titleLgSpan} flex items-center overflow-hidden pr-2">
                 <div class="relative w-10 h-10 md:w-12 md:h-12 mr-3 md:mr-4 flex-shrink-0 group cursor-pointer">
                      <img data-src="${imgUrl}" src="/music/assets/logo.svg" 
                           loading="lazy" fetchpriority="low"
@@ -1550,22 +1558,22 @@ function renderResults(list) {
             </div>
 
             <!-- Actions -->
-            <div class="col-span-2 sm:col-span-1 flex items-center justify-end gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-                <button class="p-1.5 hover:bg-emerald-50 rounded-lg text-emerald-600 transition-colors" 
+            <div class="col-span-2 sm:col-span-1 flex items-center justify-end gap-0.5 sm:gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                <button class="p-1 sm:p-1.5 hover:bg-emerald-50 rounded-lg text-emerald-600 transition-colors" 
                         title="播放" 
                         onclick="event.stopPropagation(); playFromView(${actualIndexInOriginal})">
-                    <i class="fas fa-play w-4 h-4"></i>
+                    <i class="fas fa-play w-3 h-3 sm:w-4 sm:h-4"></i>
                 </button>
-                <button class="p-1.5 hover:bg-blue-50 rounded-lg text-blue-600 transition-colors" 
+                <button class="p-1 sm:p-1.5 hover:bg-blue-50 rounded-lg text-blue-600 transition-colors" 
                         title="下载" 
                         onclick="event.stopPropagation(); downloadSong(${JSON.stringify(item).replace(/"/g, '&quot;')})">
-                    <i class="fas fa-download w-4 h-4"></i>
+                    <i class="fas fa-download w-3 h-3 sm:w-4 sm:h-4"></i>
                 </button>
                 ${currentSearchScope !== 'network' ? `
-                <button class="p-1.5 hover:bg-red-50 rounded-lg text-red-600 transition-colors" 
+                <button class="p-1 sm:p-1.5 hover:bg-red-50 rounded-lg text-red-600 transition-colors" 
                         title="删除" 
                         onclick="event.stopPropagation(); deleteSingleSong('${item.id}')">
-                    <i class="fas fa-trash w-4 h-4"></i>
+                    <i class="fas fa-trash w-3 h-3 sm:w-4 sm:h-4"></i>
                 </button>
                 ` : ''}
             </div>
@@ -3917,7 +3925,7 @@ document.addEventListener('keyup', (e) => {
 });
 
 async function updateSetting(key, value) {
-    const restrictedKeys = ['enableServerCache', 'enableServerLyricCache', 'serverCacheLocation'];
+    const restrictedKeys = ['enableServerCache', 'enableServerLyricCache', 'serverCacheLocation', 'enableOnlyDownloadMode'];
     const isPublic = !currentListData?.username || currentListData?.username === 'default';
     const enablePublicRestriction = window.lx_config?.['user.enablePublicRestriction'];
     const isAdmin = !!localStorage.getItem('lx_admin_password');
@@ -3985,6 +3993,19 @@ const SETTINGS_UI_MAP = {
     enableAutoSwitchSource: { id: 'setting-auto-switch-source', type: 'checkbox' },
     enableAutoSkipOnError: { id: 'setting-auto-skip-on-error', type: 'checkbox' },
     enablePreloader: { id: 'setting-enable-preloader', type: 'checkbox' },
+    enableSmtcLyric: {
+        id: 'setting-enable-smtc-lyric',
+        type: 'checkbox',
+        action: (v) => {
+            // 关闭时立即恢复 MediaSession title / artist 为歌曲名 / 歌手名
+            if (!v && 'mediaSession' in navigator && navigator.mediaSession.metadata && currentPlayingSong) {
+                try {
+                    navigator.mediaSession.metadata.title = currentPlayingSong.name;
+                    navigator.mediaSession.metadata.artist = currentPlayingSong.singer;
+                } catch (e) { /* ignore */ }
+            }
+        }
+    },
     downloadConcurrency: {
         id: 'setting-download-concurrency',
         type: 'value',
@@ -4044,8 +4065,11 @@ const SETTINGS_UI_MAP = {
         id: 'setting-enable-lyric-glow',
         type: 'checkbox',
         action: (v) => {
+            // 同时更新歌词详情容器和歌词内容容器，实现实时生效
             const dv = document.getElementById('view-player-detail');
             if (dv) v ? dv.classList.add('enable-lyric-glow') : dv.classList.remove('enable-lyric-glow');
+            const lc = document.getElementById('lyric-content');
+            if (lc) v ? lc.classList.add('enable-lyric-glow') : lc.classList.remove('enable-lyric-glow');
         }
     },
     playerBackground: {
@@ -4091,6 +4115,7 @@ const SETTINGS_UI_MAP = {
     enableServerCache: { id: 'setting-enable-server-cache', type: 'checkbox' },
     enableServerLyricCache: { id: 'setting-enable-server-lyric-cache', type: 'checkbox' },
     preferServerCache: { id: 'setting-prefer-server-cache', type: 'checkbox' },
+    enableOnlyDownloadMode: { id: 'setting-only-download-mode', type: 'checkbox' },
     serverCacheLocation: { id: 'setting-server-cache-location', type: 'value' },
     enableProxyPlayback: { id: 'toggle-proxy-playback', type: 'checkbox' },
     enableProxyDownload: { id: 'toggle-proxy-download', type: 'checkbox' },
@@ -5199,6 +5224,24 @@ function syncLyricByLineNum(lineNum) {
         // Add active class to current line
         if (lineNum >= 0 && lineNum < lines.length) {
             lines[lineNum].classList.add('active');
+        }
+
+        // SMTC 歌词显示：将当前歌词行写入 MediaSession metadata.title，artist 显示「歌曲名 - 歌手名」
+        if ('mediaSession' in navigator && navigator.mediaSession.metadata && settings.enableSmtcLyric) {
+            try {
+                const lyricText = (lineNum >= 0 && currentLyricLines && currentLyricLines[lineNum])
+                    ? currentLyricLines[lineNum].text
+                    : '';
+                const song = currentPlayingSong;
+                const songTitle = song ? song.name : '';
+                navigator.mediaSession.metadata.title = lyricText || songTitle;
+                // artist 字段保留「歌曲名 - 歌手名」，让用户知道当前播放的歌曲
+                if (song) {
+                    navigator.mediaSession.metadata.artist = `${song.name} - ${song.singer}`;
+                }
+            } catch (e) {
+                // ignore
+            }
         }
     }
 
@@ -6732,6 +6775,7 @@ function collectCurrentSongList() {
         name: detail.info.name || '未命名歌单',
         source: detail.source,
         sourceListId: String(detail.id),
+        Album: detail.info.img || detail.info.pic || null,
         locationUpdateTime: null,
         list: listWithSource
     };
@@ -6807,7 +6851,10 @@ async function handleRefreshList(listId, event, silent = false) {
 
         // 更新列表模型
         list.list = newList;
-        if (data.info && data.info.name) list.name = data.info.name;
+        if (data.info) {
+            if (data.info.name) list.name = data.info.name;
+            if (data.info.img || data.info.pic) list.Album = data.info.img || data.info.pic;
+        }
 
         // 推送同步并重绘 UI
         await pushDataChange();
@@ -8699,7 +8746,8 @@ async function handleDownloadClick(event) {
 
     const song = currentPlayingSong;
     const options = ['浏览器下载', '缓存到服务器'];
-    const selected = await showOptions('下载与缓存', `选择对 [${song.name}] 的操作：`, options);
+    const modeText = window.settings?.['enableOnlyDownloadMode'] ? '仅下载模式' : '缓存模式';
+    const selected = await showOptions('下载与缓存', `[${modeText}] 选择对 [${song.name}] 的操作：`, options);
 
     if (selected === '浏览器下载') {
         if (typeof downloadSong === 'function') {

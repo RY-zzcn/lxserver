@@ -538,12 +538,25 @@ class WebDAVSync extends EventEmitter {
     }
 
     public async extractZip(zipPath: string, targetPath: string): Promise<void> {
-        return new Promise((resolve, reject) => {
+        await new Promise<void>((resolve, reject) => {
             fs.createReadStream(zipPath)
                 .pipe(Extract({ path: targetPath }))
                 .on('close', () => resolve())
                 .on('error', (err) => reject(err))
         })
+
+        const extractedConfig = path.join(targetPath, 'config.js')
+        const rootConfig = path.join(process.cwd(), 'config.js')
+
+        if (fs.existsSync(extractedConfig) && path.resolve(extractedConfig) !== path.resolve(rootConfig)) {
+            console.log(`[Restore] Moving extracted config.js from ${extractedConfig} to ${rootConfig}`)
+            try {
+                fs.copyFileSync(extractedConfig, rootConfig)
+                fs.unlinkSync(extractedConfig)
+            } catch (err: any) {
+                console.error('[Restore] Failed to move config.js to root:', err.message)
+            }
+        }
     }
 
     async syncChangedFiles() {

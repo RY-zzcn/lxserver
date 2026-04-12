@@ -671,6 +671,57 @@
         :root[data-appearance="dark"] .row-selected {
             background-color: color-mix(in srgb, var(--c-500) 18%, transparent) !important;
         }
+
+        /* 响应式侧边栏优化：针对垂直高度不足的情况 */
+        @media (max-height: 845px) {
+
+            /* 压缩导航栏间距 */
+            #main-sidebar nav ul li a,
+            #main-sidebar nav ul li div[onclick] {
+                padding-top: 0.4rem !important;
+                padding-bottom: 0.4rem !important;
+            }
+
+            /* 迷你播放器改为横向布局 */
+            #sidebar-song-info:not(.hidden) {
+                display: flex !important;
+                flex-direction: row !important;
+                align-items: center !important;
+                gap: 0.75rem !important;
+                padding: 0.75rem 1rem !important;
+                text-align: left !important;
+            }
+
+            #sidebar-cover {
+                width: 3.25rem !important;
+                height: 3.25rem !important;
+                margin-bottom: 0 !important;
+                border-radius: 0.5rem !important;
+            }
+
+            #sidebar-song-info>div.text-center {
+                text-align: left !important;
+                align-items: flex-start !important;
+                flex: 1;
+                min-width: 0;
+            }
+
+            #sidebar-song-name {
+                font-size: 0.8rem !important;
+                line-height: 1.25;
+            }
+
+            #sidebar-singer {
+                font-size: 0.7rem !important;
+                line-height: 1.2;
+            }
+
+            /* 压缩底部版权信息 */
+            .sidebar-copyright-text {
+                padding-top: 0.5rem !important;
+                padding-bottom: 0.5rem !important;
+            }
+        }
     </style>
 </head>
 
@@ -686,7 +737,7 @@
 
         <!-- Sidebar -->
         <aside id="main-sidebar"
-            class="w-64 t-bg-panel shadow-lg flex flex-col z-[60] fixed inset-y-0 left-0 transform -translate-x-full md:relative md:translate-x-0 md:z-30 h-full pb-44 md:pb-32 transition-all duration-300">
+            class="w-64 t-bg-panel shadow-lg flex flex-col z-[60] fixed inset-y-0 left-0 transform -translate-x-full md:relative md:translate-x-0 md:z-30 h-full pb-28 transition-all duration-300">
             <div class="h-16 flex items-center justify-center border-b t-border-main relative">
                 <svg viewBox="0 0 447.942 447.943" class="w-8 h-8 mr-2 rounded-lg shadow-sm"
                     xmlns="http://www.w3.org/2000/svg">
@@ -768,7 +819,7 @@
             </nav>
 
             <!-- Mini Player Info (Optional, cover art here) -->
-            <div class="hidden md:block [@media(max-height:650px)]:!hidden sidebar-song-info-wrapper mt-auto">
+            <div class="hidden md:block [@media(max-height:535px)]:!hidden sidebar-song-info-wrapper mt-auto">
                 <div id="sidebar-song-info" class="p-4 border-t t-border-main hidden">
                     <img id="sidebar-cover" src="/music/assets/logo.svg" loading="lazy" fetchpriority="low"
                         onerror="this.src='/music/assets/logo.svg'; this.classList.add('is-placeholder');" alt="Cover"
@@ -782,7 +833,8 @@
                 </div>
             </div>
 
-            <div class="hidden md:block px-6 py-4 text-[10px] t-text-muted text-center border-t t-border-main">
+            <div
+                class="hidden md:block px-6 py-4 text-[10px] t-text-muted text-center border-t t-border-main sidebar-copyright-text">
                 Copyright © 2026 <a href="https://github.com/xcq0607" target="_blank"
                     class="hover:text-emerald-500 transition-colors">xcq0607</a>.<br>
                 Licensed under Apache-2.0.
@@ -1123,8 +1175,13 @@
                                 class="p-2 t-text-muted hover:t-bg-track rounded-lg">
                                 <i class="fas fa-arrow-left text-xl"></i>
                             </button>
-                            <div class="flex-1 min-w-0">
-                                <h1 id="sl-detail-title" class="font-bold truncate text-sm md:text-base">歌单详情</h1>
+                            <div class="flex-1 min-w-0 cursor-pointer select-none" onclick="toggleSlDetailHeader()"
+                                title="点击折叠/展开歌单信息">
+                                <div class="flex items-center gap-1.5">
+                                    <h1 id="sl-detail-title" class="font-bold truncate text-sm md:text-base">歌单详情</h1>
+                                    <i id="sl-detail-collapse-icon"
+                                        class="fas fa-chevron-up text-[10px] t-text-muted transition-transform duration-300 flex-shrink-0"></i>
+                                </div>
                                 <div id="sl-detail-subtitle" class="text-[10px] md:text-xs t-text-muted truncate">加载中...
                                 </div>
                             </div>
@@ -1144,7 +1201,7 @@
                         <div class="flex-1 flex flex-col overflow-hidden">
                             <!-- Info Section -->
                             <div id="sl-detail-header"
-                                class="p-4 md:p-6 flex gap-4 md:gap-6 border-b t-border-main t-bg-panel/30">
+                                class="p-4 md:p-6 flex gap-4 md:gap-6 border-b t-border-main t-bg-panel/30 overflow-hidden transition-all duration-300 ease-in-out max-h-[1000px]">
                                 <img id="sl-detail-cover" loading="lazy" fetchpriority="low"
                                     class="w-24 h-24 md:w-48 md:h-48 rounded-2xl shadow-xl flex-shrink-0 object-cover dynamic-logo is-placeholder"
                                     src="/music/assets/logo.svg">
@@ -2040,6 +2097,30 @@
                                         </label>
                                     </div>
 
+                                    <!-- Only Download Mode -->
+                                    <div class="flex items-center justify-between pb-3 border-b t-border-main">
+                                        <div>
+                                            <div class="text-sm font-bold t-text-main flex items-center">
+                                                仅下载模式 (Only Download Mode)
+                                                <span class="setting-tooltip-trigger ml-1">
+                                                    <i class="fas fa-question-circle"></i>
+                                                    <span class="setting-tooltip-content">未开启时下载到 /server/cache/用户名 (或
+                                                        /server/data/cache/)，命名为
+                                                        {Name}_-_{Singer}_-_{Source}_-_{ID}_-_{Quality}；<br>开启后下载到
+                                                        /server/music/用户名 (或 /server/data/music/)，命名为 {Name} - {Singer}
+                                                        - {Quality}。</span>
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" id="setting-only-download-mode" class="sr-only peer"
+                                                onchange="updateSetting('enableOnlyDownloadMode', this.checked)">
+                                            <div
+                                                class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500 transition-all">
+                                            </div>
+                                        </label>
+                                    </div>
+
                                     <!-- Cache Location Setting -->
                                     <div class="pb-3 border-b t-border-main">
                                         <div class="flex items-center justify-between mb-2">
@@ -2124,7 +2205,7 @@
                                         <span class="leading-tight">重置所有设置 (Reset Settings)</span>
                                     </button>
 
-                                    <button onclick="location.href='/'"
+                                    <button onclick="goToAdmin()"
                                         class="w-full py-2.5 px-4 bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white font-bold rounded-lg transition-all duration-300 border border-emerald-100 flex items-center justify-center gap-3 text-center mt-3">
                                         <i class="fas fa-tasks flex-shrink-0"></i>
                                         <span class="leading-tight">后台管理 (Backend Management)</span>
@@ -2891,6 +2972,38 @@
                                                 <input type="checkbox" id="setting-auto-skip-on-error"
                                                     class="sr-only peer"
                                                     onchange="updateSetting('enableAutoSkipOnError', this.checked)">
+                                                <div
+                                                    class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500 transition-all">
+                                                </div>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <!-- SMTC Lyric Display -->
+                                    <div
+                                        class="t-bg-panel rounded-xl border t-border-main p-4 hover:shadow-sm transition-shadow">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <h4 class="text-sm font-bold t-text-main flex items-center">
+                                                    SMTC 歌词显示 (SMTC Lyric Display)
+                                                    <span class="setting-tooltip-trigger">
+                                                        <i class="fas fa-question-circle"></i>
+                                                        <span class="setting-tooltip-content">
+                                                            将当前播放的歌词行实时写入系统媒体控制 (SMTC/MediaSession) 的标题字段，使 Windows
+                                                            任务栏、系统通知中心等能同步显示当前歌词。<br>
+                                                            <span class="text-emerald-500 font-medium">* 原理：利用 Web Media
+                                                                Session API 高频更新
+                                                                <code>metadata.title</code>
+                                                                为当前歌词行，标题会随歌词进度自动滚动。<br>
+                                                                关闭后恢复显示原始歌曲名称。</span>
+                                                        </span>
+                                                    </span>
+                                                </h4>
+                                            </div>
+                                            <label class="relative inline-flex items-center cursor-pointer">
+                                                <input type="checkbox" id="setting-enable-smtc-lyric"
+                                                    class="sr-only peer"
+                                                    onchange="updateSetting('enableSmtcLyric', this.checked)">
                                                 <div
                                                     class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500 transition-all">
                                                 </div>
@@ -4579,6 +4692,12 @@
             </div>
         </div>
     </div>
+    <script>
+        function goToAdmin() {
+            var adminPath = (window.CONFIG && window.CONFIG['admin.path']) || '';
+            location.href = adminPath || '/';
+        }
+    </script>
 </body>
 
 </html>

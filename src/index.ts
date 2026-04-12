@@ -204,6 +204,18 @@ if (envParams.PROXY_ALL_ENABLED) {
 if (envParams.PROXY_ALL_ADDRESS) {
   global.lx.config['proxy.all.address'] = envParams.PROXY_ALL_ADDRESS
 }
+if (envParams.ADMIN_PATH !== undefined) {
+  global.lx.config['admin.path'] = envParams.ADMIN_PATH
+}
+if (envParams.PLAYER_PATH !== undefined) {
+  global.lx.config['player.path'] = envParams.PLAYER_PATH
+}
+if (envParams.SUBSONIC_ENABLE !== undefined) {
+  global.lx.config['subsonic.enable'] = envParams.SUBSONIC_ENABLE === 'true'
+}
+if (envParams.SUBSONIC_PATH !== undefined) {
+  global.lx.config['subsonic.path'] = envParams.SUBSONIC_PATH
+}
 
 if (envUsers.length) {
   const users: LX.Config['users'] = []

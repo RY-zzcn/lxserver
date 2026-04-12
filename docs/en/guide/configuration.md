@@ -28,6 +28,8 @@ This module manages the Node.js listening process and the basic settings of the 
 | :-------------------- | :------------ | :------- | :-------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `PORT` | `9527` | Integer | **Service listening port**. It is recommended to avoid using other high-frequency ports in the host (such as 80, 443, 3306). |
 | `BIND_IP` | `0.0.0.0` | String | **Scope of service binding IP interfaces**. Set to `127.0.0.1` to accept only local Lookback calls; set to `0.0.0.0` means listening to all internal and external available network adapters of the host simultaneously. |
+| `ADMIN_PATH` | `''` | String | **Backend management interface path**. Default is empty, i.e., root `/`. |
+| `PLAYER_PATH` | `'/music'` | String | **Web player access path**. Default is `/music`. |
 | `SERVER_NAME` | `My Sync Server` | String | **Sync service name**. Showed in client connections. |
 | `PROXY_HEADER` | `x-real-ip` | String | **Reverse proxy remote IP penetration identifier**. When the system runs behind reverse proxies or load balancers such as Nginx, it is used to extract the true client source IP address to ensure accurate traceability of equipment audit logs. |
 | `PROXY_ALL_ENABLED` | `false` | Boolean | **Enable global outgoing request proxy**. If enabled, network requests from the server (e.g. search, resolving) will go through the proxy. |
@@ -68,7 +70,7 @@ The underlying periodic polling asynchronous daemon of the service will only be 
 
 | Environment Variable Mapping Key (ENV) | System Default Value | Data Type | Scope and Applicable Scenarios |
 | :------------------------ | :--------- | :------- | :------------------------------------------------------------------------------------------------------------------ |
-| `ENABLE_WEBPLAYER_AUTH` | `false` | Boolean | Whether to establish a separate entry-blocking defense wall for the derived browser access interface (the application entity rendered under the `/music` path) and refuse direct face-to-face from visitors. |
+| `ENABLE_WEBPLAYER_AUTH` | `false` | Boolean | Whether to establish a separate entry-blocking defense wall for the derived browser access interface (the application entity rendered under the default `/music` path) and refuse direct face-to-face from visitors. |
 | `WEBPLAYER_PASSWORD` | `123456` | String | If the upper-level authentication mode takes effect, it is the separate password dictionary for verification. This gives administrators the ability to decouple keys for different levels of the audience layer and the backend control panel. |
 
 ### V. Playlist Management Strategy
@@ -76,6 +78,13 @@ The underlying periodic polling asynchronous daemon of the service will only be 
 | Environment Variable Mapping Key (ENV) | System Default Value | Data Type | Scope and Applicable Scenarios |
 | :--- | :--- | :--- | :--- |
 | `LIST_ADD_MUSIC_LOCATION_TYPE` | `top` | String | **New song location**. `top` (add to the top) or `bottom` (add to the bottom). |
+
+### VII. Subsonic Protocol Configuration
+
+| Environment Variable Mapping Key (ENV) | System Default Value | Data Type | Scope and Applicable Scenarios |
+| :--- | :--- | :--- | :--- |
+| `SUBSONIC_ENABLE` | `true` | Boolean | **Enable Subsonic protocol**. Allows connections from Subsonic-compatible clients. |
+| `SUBSONIC_PATH` | `'/rest'` | String | **Subsonic access path**. Default is `/rest`. |
 
 ### VI. (Advanced Feature) Silent Preset Accounts in CLI Environment
 

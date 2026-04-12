@@ -22,6 +22,11 @@ class App {
         this.password = null;
         this.currentView = 'dashboard';
         this.users = [];
+        this.systemCpuHistory = [];
+        this.processCpuHistory = [];
+        this.systemMemHistory = [];
+        this.processMemHistory = [];
+        this.monitorTimer = null;
         this.init();
         this.initVersion();
     }
@@ -63,6 +68,16 @@ class App {
 
         // 用户管理
         document.getElementById('add-user-btn')?.addEventListener('click', () => this.showAddUserModal());
+        document.getElementById('refresh-users-btn')?.addEventListener('click', async () => {
+            try {
+                await this.request('/api/admin/reload', { method: 'POST' });
+                this.loadUsers();
+                this.loadDashboard();
+                showSuccess('重载数据成功');
+            } catch (err) {
+                showError('重载数据失败: ' + err.message);
+            }
+        });
         // 新增：批量删除和全选
         document.getElementById('batch-delete-users-btn')?.addEventListener('click', () => this.batchDeleteUsers());
         document.getElementById('select-all-users')?.addEventListener('change', (e) => this.toggleAllUsers(e.target.checked));
@@ -104,7 +119,7 @@ class App {
         document.getElementById('data-user-select')?.addEventListener('change', () => this.loadUserData());
 
         // 快照管理用户选择事件
-        document.getElementById('snapshot-user-select')?.addEventListener('change', () => this.loadSnapshots());
+        // document.getElementById('snapshot-user-select')?.addEventListener('change', () => this.loadSnapshots());
         // WebDAV 和文件管理器
         this.bindWebDAVEvents();
         this.bindFileManagerEvents();
@@ -133,12 +148,9 @@ class App {
         const mobileSidebarOverlay = document.getElementById('mobile-sidebar-overlay');
         const sidebar = document.querySelector('.sidebar');
 
-        const toggleMobileSidebar = () => {
-            if (!sidebar || !mobileSidebarOverlay) return;
-
+        const toggleSidebar = () => {
             sidebar.classList.toggle('active');
             mobileSidebarOverlay.classList.toggle('active');
-
             if (mobileSidebarOverlay.classList.contains('active')) {
                 mobileSidebarOverlay.classList.remove('hidden');
             } else {
@@ -152,18 +164,18 @@ class App {
         };
 
         if (mobileMenuBtn) {
-            mobileMenuBtn.addEventListener('click', toggleMobileSidebar);
+            mobileMenuBtn.addEventListener('click', toggleSidebar);
         }
 
         if (mobileSidebarOverlay) {
-            mobileSidebarOverlay.addEventListener('click', toggleMobileSidebar);
+            mobileSidebarOverlay.addEventListener('click', toggleSidebar);
         }
 
         // Close on nav click (mobile only)
         document.querySelectorAll('.nav-item').forEach(item => {
             item.addEventListener('click', () => {
                 if (window.innerWidth <= 768 && sidebar && sidebar.classList.contains('active')) {
-                    toggleMobileSidebar();
+                    toggleSidebar();
                 }
             });
         });
@@ -216,7 +228,7 @@ class App {
         document.getElementById('app').classList.remove('hidden');
     }
 
-    switchView(viewName) {
+    async switchView(viewName) {
         // 更新导航状态
         document.querySelectorAll('.nav-item').forEach(item => {
             item.classList.toggle('active', item.dataset.view === viewName);
@@ -261,7 +273,13 @@ class App {
                 this.loadLogs();
                 break;
             case 'webdav':
-                this.loadSyncLogs();
+                try {
+                    const status = await this.request('/api/status');
+                    this.checkWebDAVConfig(status.isWebDAVConfigured);
+                    this.loadSyncLogs();
+                } catch (e) {
+                    console.error('Failed to check webdav status:', e);
+                }
                 break;
             case 'snapshots':
                 this.loadSnapshots();
@@ -274,7 +292,7 @@ class App {
                 window.location.href = '/filemanager.html';
                 return;
             case 'music':
-                window.location.href = '/music';
+                window.location.href = (window.CONFIG && window.CONFIG['player.path']) || '/music';
                 return;
         }
     }
@@ -341,34 +359,287 @@ class App {
                 sidebarVersionEl.classList.remove('hidden');
             }
         }
+        // 初始化播放器链接
+        const navPlayerLink = document.getElementById('nav-player-link');
+        if (navPlayerLink && window.CONFIG && window.CONFIG['player.path']) {
+            navPlayerLink.href = window.CONFIG['player.path'];
+        }
     }
 
     async loadDashboard() {
+        this.updateGreeting();
         try {
-            // [新增] 获取服务器状态
             const status = await this.request('/api/status');
 
-            // 更新 UI
+            // 更新顶部概览卡片
             document.getElementById('stat-users').textContent = status.users;
             document.getElementById('stat-devices').textContent = status.devices;
-            document.getElementById('stat-uptime').textContent = this.formatUptime(status.uptime);
+            document.getElementById('stat-cpu').textContent = status.cpuUsage + '%';
             document.getElementById('stat-memory').textContent = this.formatFileSize(status.memory);
 
-            // 加载用户列表以填充数据查看下拉框
+            // 实时监控详情
+            this.updateMonitorUI(status);
+
+            // 加载用户列表
             const users = await this.request('/api/users');
-            const userOptions = '<option value="">选择用户</option>' +
-                users.map(u => `<option value="${u.name}">${u.name}</option>`).join('');
+            this.allUsers = users;
+            this.renderAllUserSelectors();
 
-            // 填充数据查看页面的下拉框
-            const dataSelect = document.getElementById('data-user-select');
-            if (dataSelect) dataSelect.innerHTML = userOptions;
-
-            // [新增] 填充快照管理页面的下拉框
-            const snapshotSelect = document.getElementById('snapshot-user-select');
-            if (snapshotSelect) snapshotSelect.innerHTML = userOptions;
+            // 启动定时刷新
+            this.startMonitor();
 
         } catch (err) {
             console.error('Failed to load dashboard:', err);
+        }
+    }
+
+    updateGreeting() {
+        const hour = new Date().getHours();
+        let greeting = '你好';
+        if (hour < 6) greeting = '深夜好';
+        else if (hour < 9) greeting = '早安';
+        else if (hour < 12) greeting = '上午好';
+        else if (hour < 14) greeting = '中午好';
+        else if (hour < 18) greeting = '下午好';
+        else if (hour < 22) greeting = '晚上好';
+        else greeting = '深夜好';
+
+        const greetingEl = document.getElementById('greeting-text');
+        if (greetingEl) greetingEl.textContent = greeting;
+
+        const dateEl = document.getElementById('dashboard-date');
+        if (dateEl) {
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            dateEl.textContent = '今天是 ' + new Date().toLocaleDateString('zh-CN', options);
+        }
+    }
+
+    startMonitor() {
+        if (this.monitorTimer) return;
+        this.monitorTimer = setInterval(async () => {
+            if (this.currentView !== 'dashboard' || !this.password) {
+                clearInterval(this.monitorTimer);
+                this.monitorTimer = null;
+                return;
+            }
+            try {
+                const status = await this.request('/api/status');
+                this.updateMonitorUI(status);
+            } catch (e) {
+                console.error('Monitor refresh failed:', e);
+            }
+        }, 3000);
+    }
+
+    updateMonitorUI(status) {
+        // --- CPU 监控 ---
+        const sysCpuVal = parseFloat(status.cpuUsage) || 0;
+        const procCpuVal = parseFloat(status.processCpuUsage) || 0;
+
+        // 顶部概览
+        const statCpu = document.getElementById('stat-cpu');
+        const statProcCpu = document.getElementById('stat-process-cpu');
+        if (statCpu) statCpu.textContent = sysCpuVal.toFixed(2) + '%';
+        if (statProcCpu) statProcCpu.textContent = procCpuVal.toFixed(2) + '%';
+
+        // 详情面板
+        const cpuProgress = document.getElementById('monitor-cpu-progress');
+        const sysCpuText = document.getElementById('monitor-cpu-val');
+        const procCpuText = document.getElementById('monitor-process-cpu-val');
+        if (cpuProgress) cpuProgress.style.width = Math.max(sysCpuVal, procCpuVal) + '%';
+        if (sysCpuText) sysCpuText.textContent = sysCpuVal.toFixed(2) + '%';
+        if (procCpuText) procCpuText.textContent = procCpuVal.toFixed(2) + '%';
+
+        this.systemCpuHistory.push(sysCpuVal);
+        this.processCpuHistory.push(procCpuVal);
+        if (this.systemCpuHistory.length > 20) {
+            this.systemCpuHistory.shift();
+            this.processCpuHistory.shift();
+        }
+        this.renderMultiLineChart('cpu-chart', [
+            { data: this.systemCpuHistory, color: 'rgba(59, 130, 246, 0.4)', fill: true, label: 'System' },
+            { data: this.processCpuHistory, color: '#a855f7', fill: false, label: 'Process', strokeWidth: 3 }
+        ]);
+
+        // --- 内存监控 ---
+        const sysMemVal = parseFloat(status.systemMemoryUsage) || 0;
+        const procMemVal = parseFloat(status.processMemoryUsage) || 0;
+
+        // 顶部概览
+        const statMemPerc = document.getElementById('stat-memory-percent');
+        const statProcMemPerc = document.getElementById('stat-process-memory-percent');
+        const statMemAbs = document.getElementById('stat-memory');
+        if (statMemPerc) statMemPerc.textContent = sysMemVal.toFixed(2) + '%';
+        if (statProcMemPerc) statProcMemPerc.textContent = procMemVal.toFixed(2) + '%';
+        if (statMemAbs) statMemAbs.textContent = this.formatFileSize(status.memory);
+
+        // 详情面板
+        const memProgress = document.getElementById('monitor-mem-progress');
+        const sysMemText = document.getElementById('monitor-mem-val');
+        const procMemText = document.getElementById('monitor-process-mem-val');
+        if (memProgress) memProgress.style.width = sysMemVal + '%';
+        if (sysMemText) sysMemText.textContent = sysMemVal.toFixed(2) + '%';
+        if (procMemText) procMemText.textContent = procMemVal.toFixed(2) + '%';
+
+        this.systemMemHistory.push(sysMemVal);
+        this.processMemHistory.push(procMemVal);
+        if (this.systemMemHistory.length > 20) {
+            this.systemMemHistory.shift();
+            this.processMemHistory.shift();
+        }
+        this.renderMultiLineChart('mem-chart', [
+            { data: this.systemMemHistory, color: 'rgba(16, 185, 129, 0.4)', fill: true, label: 'System' },
+            { data: this.processMemHistory, color: '#3b82f6', fill: false, label: 'Process', strokeWidth: 3 }
+        ]);
+
+        // --- 状态与概览更新 ---
+        const statUsers = document.getElementById('stat-users');
+        const statDevices = document.getElementById('stat-devices');
+        const statUptime = document.getElementById('stat-uptime');
+        if (statUsers) statUsers.textContent = status.users;
+        if (statDevices) statDevices.textContent = status.devices;
+        if (statUptime) statUptime.textContent = this.formatUptime(status.uptime);
+
+        // 更新硬件详情
+        const statCpuInfo = document.getElementById('stat-cpu-info');
+        if (statCpuInfo) {
+            const speedGhz = (status.cpuSpeed / 1000).toFixed(1);
+            statCpuInfo.textContent = `${status.cpus} Cores @ ${speedGhz}GHz`;
+        }
+    }
+
+    renderMultiLineChart(svgId, series) {
+        const svg = document.getElementById(svgId);
+        if (!svg) return;
+
+        const width = 200;
+        const height = 60;
+        const padding = 5;
+
+        let html = '';
+        series.forEach((s, idx) => {
+            if (s.data.length < 2) return;
+
+            const points = s.data.map((val, i) => {
+                const x = (i / (s.data.length - 1)) * width;
+                const y = height - (Math.max(val, 2) / 100) * (height - padding * 2) - padding;
+                return { x, y };
+            });
+
+            // 二次贝塞尔曲线平滑处理
+            let d = `M ${points[0].x} ${points[0].y}`;
+            for (let i = 0; i < points.length - 1; i++) {
+                const xc = (points[i].x + points[i + 1].x) / 2;
+                const yc = (points[i].y + points[i + 1].y) / 2;
+                d += ` Q ${points[i].x} ${points[i].y} ${xc} ${yc}`;
+            }
+            d += ` L ${points[points.length - 1].x} ${points[points.length - 1].y}`;
+
+            if (s.fill) {
+                const fillD = d + ` L ${width} ${height} L 0 ${height} Z`;
+                html += `
+                    <defs>
+                        <linearGradient id="grad-${svgId}-${idx}" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:${s.color};stop-opacity:0.3" />
+                            <stop offset="100%" style="stop-color:${s.color};stop-opacity:0" />
+                        </linearGradient>
+                    </defs>
+                    <path d="${fillD}" fill="url(#grad-${svgId}-${idx})" />
+                `;
+            }
+
+            html += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${s.strokeWidth || 2}" stroke-linecap="round" />`;
+        });
+
+        svg.innerHTML = html;
+    }
+
+
+    renderAllUserSelectors() {
+        this.renderUserDropdown('data');
+        this.renderUserDropdown('snapshot');
+
+        // 如果当前没有选择用户，在内容区展示选择网格
+        if (!document.getElementById('data-user-select').value) {
+            this.renderUserSelectionGrid('data');
+        }
+        if (!document.getElementById('snapshot-user-select').value) {
+            this.renderUserSelectionGrid('snapshot');
+        }
+    }
+
+    toggleUserDropdown(type) {
+        const selector = document.getElementById(`${type}-user-selector`);
+        const dropdown = document.getElementById(`${type}-user-dropdown`);
+        const isOpen = !dropdown.classList.contains('hidden');
+
+        // 关闭所有其他的
+        document.querySelectorAll('.selector-dropdown').forEach(d => d.classList.add('hidden'));
+        document.querySelectorAll('.custom-user-selector').forEach(s => s.classList.remove('open'));
+
+        if (!isOpen) {
+            dropdown.classList.remove('hidden');
+            selector.classList.add('open');
+        }
+    }
+
+    renderUserDropdown(type) {
+        const dropdown = document.getElementById(`${type}-user-dropdown`);
+        if (!dropdown || !this.allUsers) return;
+
+        const currentSelected = document.getElementById(`${type}-user-select`).value;
+
+        dropdown.innerHTML = this.allUsers.map(user => `
+            <div class="dropdown-item ${user.name === currentSelected ? 'active' : ''}" 
+                 onclick="app.selectUser('${type}', '${user.name}')">
+                <div class="dropdown-avatar">${user.name.charAt(0).toUpperCase()}</div>
+                <span>${this.escapeHtml(user.name)}</span>
+                ${user.name === currentSelected ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="width:14px;height:14px;margin-left:auto;"><polyline points="20 6 9 17 4 12"></polyline></svg>' : ''}
+            </div>
+        `).join('');
+    }
+
+    renderUserSelectionGrid(type) {
+        const container = type === 'data' ? document.getElementById('data-content') : document.getElementById('snapshots-list');
+        if (!container || !this.allUsers) return;
+
+        // 特殊处理：如果是数据查看视图，且没有选择用户，stats 区域也需要清空
+        if (type === 'data') {
+            document.getElementById('data-stats').innerHTML = '';
+        }
+
+        container.innerHTML = `
+            <div class="user-selection-grid fade-in">
+                ${this.allUsers.map(user => `
+                    <div class="user-select-card" onclick="app.selectUser('${type}', '${user.name}')">
+                        <div class="avatar">${user.name.charAt(0).toUpperCase()}</div>
+                        <div class="name">${this.escapeHtml(user.name)}</div>
+                        <div class="role">用户数据</div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    selectUser(type, username) {
+        const input = document.getElementById(`${type}-user-select`);
+        const title = document.querySelector(`#${type}-user-selector .selected-username`);
+
+        input.value = username;
+        title.textContent = username;
+
+        // 关闭下拉
+        document.getElementById(`${type}-user-dropdown`).classList.add('hidden');
+        document.getElementById(`${type}-user-selector`).classList.remove('open');
+
+        // 刷新下拉列表显示状态
+        this.renderUserDropdown(type);
+
+        // 加载数据
+        if (type === 'data') {
+            this.loadUserData();
+        } else {
+            this.loadSnapshots();
         }
     }
 
@@ -540,6 +811,20 @@ class App {
         this.updateUserBatchBtn();
     }
 
+    filterUsers() {
+        const query = document.getElementById('user-search-input').value.toLowerCase().trim();
+        const rows = document.querySelectorAll('#users-list .user-row');
+
+        rows.forEach(row => {
+            const userName = row.querySelector('.col-name').textContent.toLowerCase();
+            if (userName.includes(query)) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    }
+
     showAddUserModal() {
         const modal = document.getElementById('modal');
         const modalTitle = document.getElementById('modal-title');
@@ -700,10 +985,17 @@ class App {
 
     async loadUserData() {
         const username = document.getElementById('data-user-select')?.value;
+        const statsContainer = document.getElementById('data-stats');
+        const contentContainer = document.getElementById('data-content');
+
         if (!username) {
-            document.getElementById('data-content').innerHTML = '<p style="color: var(--text-secondary); padding: 2rem; text-align: center;">请选择用户</p>';
+            this.renderUserSelectionGrid('data');
             return;
         }
+
+        // 添加加载状态
+        statsContainer.classList.add('content-loading');
+        contentContainer.classList.add('content-loading');
 
         try {
             const data = await this.request(`/api/data?user=${encodeURIComponent(username)}`);
@@ -740,8 +1032,21 @@ class App {
             `;
 
             this.renderPlaylists();
+
+            // 移除加载状态并添加淡入动画
+            statsContainer.classList.remove('content-loading');
+            contentContainer.classList.remove('content-loading');
+            statsContainer.classList.add('fade-in');
+            contentContainer.classList.add('fade-in');
+
+            // 动画完成后移除类，以便下次触发
+            setTimeout(() => {
+                statsContainer.classList.remove('fade-in');
+                contentContainer.classList.remove('fade-in');
+            }, 400);
+
         } catch (err) {
-            document.getElementById('data-content').innerHTML = '<p style="color: var(--accent-error); padding: 2rem; text-align: center;">加载数据失败</p>';
+            contentContainer.innerHTML = '<p style="color: var(--accent-error); padding: 2rem; text-align: center;">加载数据失败</p>';
         } finally {
             applyMarqueeChecks();
         }
@@ -864,7 +1169,6 @@ class App {
                     <div class="song-col-index">#</div>
                     <div class="song-col-name">歌曲</div>
                     <div class="song-col-artist">歌手</div>
-                    <div class="song-col-album">专辑</div>
                     <div class="song-col-actions">操作</div>
                 </div>
             `;
@@ -878,7 +1182,6 @@ class App {
                         <div class="song-col-index">${songIndex + 1}</div>
                         ${this.renderSongNameCell(song)}
                         <div class="song-col-artist">${this.escapeHtml(song.singer || '未知歌手')}</div>
-                        <div class="song-col-album">${this.escapeHtml(song.albumName || '-')}</div>
                         <div class="song-col-actions">
                             <button class="btn-delete-song" onclick="app.deleteSong(${index}, ${songIndex})" title="删除歌曲">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1004,7 +1307,6 @@ class App {
                     <div class="song-col-index">#</div>
                     <div class="song-col-name">歌曲</div>
                     <div class="song-col-artist">歌手</div>
-                    <div class="song-col-album">专辑</div>
                     <div class="song-col-source">来源</div>
                     <div class="song-col-actions">操作</div>
                 </div>
@@ -1016,7 +1318,6 @@ class App {
                         <div class="song-col-index">${songIndex + 1}</div>
                         ${this.renderSongNameCell(song)}
                         <div class="song-col-artist">${this.escapeHtml(song.singer || '未知歌手')}</div>
-                        <div class="song-col-album">${this.escapeHtml(song.albumName || '-')}</div>
                         <div class="song-col-actions">
                             <button class="btn-delete-song" onclick="app.deleteSong('${listType}', ${songIndex})" title="删除歌曲">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1278,7 +1579,6 @@ class App {
                     <div class="song-col-index">#</div>
                     <div class="song-col-name">歌曲</div>
                     <div class="song-col-artist">歌手</div>
-                    <div class="song-col-album">专辑</div>
                     <div class="song-col-playlist">所属列表</div>
                 </div>
             `;
@@ -1289,7 +1589,6 @@ class App {
                         <div class="song-col-index">${songIndex + 1}</div>
                         ${this.renderSongNameCell(song)}
                         <div class="song-col-artist" title="${this.escapeHtml(song.singer || '未知歌手')}">${this.escapeHtml(song.singer || '未知歌手')}</div>
-                        <div class="song-col-album" title="${this.escapeHtml(song.albumName || '-')}">${this.escapeHtml(song.albumName || '-')}</div>
                         <div class="song-col-playlist">${this.escapeHtml(song._source)}</div>
                     </div>
                 `;
@@ -1351,6 +1650,14 @@ class App {
             if (form.elements['sync.interval']) {
                 form.elements['sync.interval'].value = config['sync.interval'] || 60;
             }
+
+            // URL路径配置
+            if (form.elements['admin.path']) {
+                form.elements['admin.path'].value = config['admin.path'] ?? '';
+            }
+            if (form.elements['player.path']) {
+                form.elements['player.path'].value = config['player.path'] ?? '/music';
+            }
         } catch (err) {
             console.error('Failed to load config:', err);
         }
@@ -1359,6 +1666,31 @@ class App {
     async saveConfig() {
         const form = document.getElementById('config-form');
         const formData = new FormData(form);
+
+        // 路径校验
+        const adminPath = (formData.get('admin.path') || '').trim();
+        const playerPath = (formData.get('player.path') || '').trim();
+        const errEl = document.getElementById('path-conflict-error');
+        let pathError = '';
+
+        if (!playerPath) {
+            pathError = '⚠️ 播放器路径不能为空';
+        } else if (!playerPath.startsWith('/')) {
+            pathError = '⚠️ 播放器路径必须以 / 开头';
+        } else if (adminPath !== '' && !adminPath.startsWith('/')) {
+            pathError = '⚠️ 后台路径必须以 / 开头（或留空表示根路径）';
+        } else if ((adminPath || '/') === playerPath) {
+            pathError = '⚠️ 后台管理路径与播放器路径不能相同';
+        } else if (adminPath.startsWith('/api') || playerPath.startsWith('/api')) {
+            pathError = '⚠️ 路径不能以 /api 开头（与 API 路由冲突）';
+        }
+
+        if (errEl) {
+            errEl.textContent = pathError;
+            errEl.style.display = pathError ? 'block' : 'none';
+        }
+        if (pathError) return;
+
         const config = {
             serverName: formData.get('serverName'),
             maxSnapshotNum: parseInt(formData.get('maxSnapshotNum')),
@@ -1377,6 +1709,8 @@ class App {
             'webdav.username': formData.get('webdav.username'),
             'webdav.password': formData.get('webdav.password'),
             'sync.interval': parseInt(formData.get('sync.interval')) || 60,
+            'admin.path': adminPath,
+            'player.path': playerPath,
         };
 
         try {
@@ -1390,6 +1724,10 @@ class App {
                 this.password = config['frontend.password'];
                 localStorage.setItem('lx_auth', config['frontend.password']);
             }
+
+            // 更新侧边栏播放器链接
+            const navPlayerLink = document.getElementById('nav-player-link');
+            if (navPlayerLink) navPlayerLink.href = playerPath || '/music';
 
             if (res.warning) {
                 showInfo('配置保存成功！\n\n⚠️ 警告：' + res.warning);
@@ -1649,11 +1987,16 @@ class App {
             ? `<img src="${picUrl}" class="song-cover" loading="lazy" alt="cover" onerror="this.style.opacity=0">`
             : `<div class="song-cover" style="background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center;">🎵</div>`;
 
+        const singerHtml = song.singer
+            ? `<span class="song-singer-mobile">${this.escapeHtml(song.singer)}</span>`
+            : '';
+
         return `
             <div class="song-col-name">
                 ${coverHtml}
                 <div class="song-info-wrapper min-w-0">
                     <span class="song-title-text dynamic-marquee truncate" title="${this.escapeHtml(song.name)}">${this.escapeHtml(song.name || '未知歌曲')}</span>
+                    ${singerHtml}
                     ${this.renderSongTags(song)}
                 </div>
             </div>
@@ -1988,9 +2331,12 @@ class App {
         const container = document.getElementById('snapshots-list');
 
         if (!username) {
-            container.innerHTML = '<div style="padding: 2rem; text-align: center; color: var(--text-secondary);">请先选择用户</div>';
+            this.renderUserSelectionGrid('snapshot');
             return;
         }
+
+        // 添加加载状态
+        container.classList.add('content-loading');
 
         try {
             // 添加 user 参数
@@ -1998,6 +2344,7 @@ class App {
 
             if (!list.length) {
                 container.innerHTML = '<div style="padding: 2rem; text-align: center; color: var(--text-secondary);">暂无快照</div>';
+                container.classList.remove('content-loading');
                 return;
             }
 
@@ -2035,9 +2382,20 @@ class App {
                 </div>
             </div>
         `).join('');
+
+            // 移除加载状态并添加淡入动画
+            container.classList.remove('content-loading');
+            container.classList.add('fade-in');
+
+            // 动画完成后移除类
+            setTimeout(() => {
+                container.classList.remove('fade-in');
+            }, 400);
+
         } catch (err) {
             console.error(err);
             showError('加载快照列表失败: ' + err.message);
+            container.classList.remove('content-loading');
         }
     }
     triggerUploadSnapshot() {
@@ -2266,7 +2624,50 @@ class App {
             showError('重启请求失败: ' + err.message)
         }
     }
+
+    checkWebDAVConfig(isConfigured) {
+        const cloudGroup = document.getElementById('webdav-cloud-group');
+        const guideCard = document.getElementById('webdav-config-guide');
+        const statusSection = document.getElementById('webdav-status-section');
+        const logsSection = document.getElementById('webdav-logs-section');
+
+        if (isConfigured) {
+            cloudGroup?.classList.remove('hidden');
+            guideCard?.classList.add('hidden');
+            statusSection?.classList.remove('hidden');
+            logsSection?.classList.remove('hidden');
+        } else {
+            cloudGroup?.classList.add('hidden');
+            guideCard?.classList.remove('hidden');
+            statusSection?.classList.add('hidden');
+            logsSection?.classList.add('hidden');
+        }
+    }
+
+    jumpToWebDAVConfig() {
+        this.switchView('config').then(() => {
+            setTimeout(() => {
+                const target = document.getElementById('config-card-webdav');
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    target.style.outline = '2px solid var(--accent-primary)';
+                    target.style.outlineOffset = '4px';
+                    setTimeout(() => {
+                        target.style.outline = 'none';
+                    }, 2000);
+                }
+            }, 300);
+        });
+    }
 }
+
+// 监听点击外部关闭下拉菜单
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.custom-user-selector')) {
+        document.querySelectorAll('.selector-dropdown').forEach(d => d.classList.add('hidden'));
+        document.querySelectorAll('.custom-user-selector').forEach(s => s.classList.remove('open'));
+    }
+});
 
 // 初始化应用
 const app = new App();

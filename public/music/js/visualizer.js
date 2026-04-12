@@ -147,7 +147,7 @@ const musicVisualizer = (function () {
             const footerIsHidden = playerFooter && playerFooter.classList.contains('translate-y-[110%]');
 
             // 增加容器高度和 Footer 高度
-            const isShortWindow = window.innerHeight <= 700;
+            const isShortWindow = window.innerHeight <= 845;
             visualizerContainer.style.height = isShortWindow ? '40px' : '100px';
             visualizerContainer.style.zIndex = '1';
             visualizerContainer.style.display = 'flex'; // 确保可见
@@ -171,11 +171,12 @@ const musicVisualizer = (function () {
 
             // 调整内容区域的间距以防被遮挡
             const mainViews = document.querySelectorAll('#view-search, #view-favorites, #view-settings, #view-about, #view-player-detail, #view-songlist, #songlist-detail-view, #view-leaderboard');
+            const isMobile = window.innerWidth < 768;
+            let targetPb = footerIsHidden ? '' : (isShortWindow ? '120px' : '180px');
+
             mainViews.forEach(view => {
                 view.style.transition = 'padding-bottom 0.3s ease, padding-top 0.3s ease';
-                const isMobile = window.innerWidth < 768;
-                let pb = footerIsHidden ? '' : (isMobile ? '180px' : '180px');
-                if (!footerIsHidden && isShortWindow) pb = (isMobile ? '120px' : '120px');
+                let pb = targetPb;
 
                 if (view.id === 'view-player-detail') {
                     // [Fix] 详情页特殊处理：使用容器 Margin 而不是视图 Padding，防止背景图层因 Padding 出现视觉断层（黑线）
@@ -202,7 +203,7 @@ const musicVisualizer = (function () {
             const sidebar = document.querySelector('aside');
             if (sidebar) {
                 sidebar.style.transition = 'padding-bottom 0.3s ease';
-                sidebar.style.paddingBottom = footerIsHidden ? '' : '180px';
+                sidebar.style.paddingBottom = targetPb;
             }
         } else if (footerCanvas && visualizerContainer) {
             footerCanvas.style.opacity = '0';

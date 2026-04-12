@@ -76,3 +76,8 @@ docs/node_modules
 
 # Electron build outputs (CI-generated)
 dist-electron/
+
+old/
+
+.stylelintrc.json
+reference/

@@ -163,7 +163,8 @@ async function downloadSong(songOrId, forceQuality = null, suppressAlerts = fals
     let selected = skipPromptTarget;
     if (!selected) {
         const options = ['浏览器下载', '缓存到服务器'];
-        selected = await showOptions('下载与缓存', `选择对 [${song.name}] 的操作：`, options);
+        const modeText = window.settings?.['enableOnlyDownloadMode'] ? '仅下载模式' : '缓存模式';
+        selected = await showOptions('下载与缓存', `[${modeText}] 选择对 [${song.name}] 的操作：`, options);
     }
     if (!selected) return false;
 
@@ -287,7 +288,8 @@ async function batchDownloadFromList() {
 
     // Prompt user for download location
     const options = ['浏览器下载', '缓存到服务器'];
-    const selected = await showOptions('批量下载与缓存', `选择了 ${songsToDownload.length} 首歌曲，请选择操作：`, options);
+    const modeText = window.settings?.['enableOnlyDownloadMode'] ? '仅下载模式' : '缓存模式';
+    const selected = await showOptions('批量下载与缓存', `[${modeText}] 选择了 ${songsToDownload.length} 首歌曲，请选择操作：`, options);
 
     if (!selected) return;
 

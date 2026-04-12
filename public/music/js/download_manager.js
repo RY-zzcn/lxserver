@@ -376,7 +376,7 @@ class DownloadManager {
             const res = await fetch('/api/music/cache/download', {
                 method: 'POST',
                 headers,
-                body: JSON.stringify({ songInfo: task.song, url: rawUrl, quality })
+                body: JSON.stringify({ songInfo: task.song, url: rawUrl, quality, enableOnlyDownloadMode: window.settings?.enableOnlyDownloadMode || false })
             });
 
             if (!res.ok) throw new Error('服务器拒绝缓存');
@@ -650,7 +650,7 @@ class DownloadManager {
                     const res = await fetch('/api/music/cache/download', {
                         method: 'POST',
                         headers,
-                        body: JSON.stringify({ songInfo: task.song, url: rawUrl, quality })
+                        body: JSON.stringify({ songInfo: task.song, url: rawUrl, quality, enableOnlyDownloadMode: window.settings?.enableOnlyDownloadMode || false })
                     });
                     if (!res.ok) throw new Error('服务器拒绝请求');
 
@@ -754,7 +754,7 @@ class DownloadManager {
                         const res = await fetch('/api/music/cache/download', {
                             method: 'POST',
                             headers,
-                            body: JSON.stringify({ songInfo: t.song, url: rawUrl, quality })
+                            body: JSON.stringify({ songInfo: t.song, url: rawUrl, quality, enableOnlyDownloadMode: window.settings?.enableOnlyDownloadMode || false })
                         });
                         if (!res.ok) throw new Error('服务器拒绝缓存');
 

@@ -8,7 +8,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        感谢你反馈 Bug！请务必仔细阅读并填写以下信息，这将帮助我们快速定位问题。
+        感谢你反馈 Bug！请务必仔细阅读并填写以下信息，这将帮助我们快速定位问题。**如果问题描述不清楚，issue 将会在一天后关闭。**
   - type: checkboxes
     id: checklist
     attributes:
@@ -98,7 +98,7 @@ body:
   - type: input
     id: env_version
     attributes:
-      label: Node/Python版本 (如果适用)
+      label: Node版本
   - type: textarea
     id: screenshots
     attributes:

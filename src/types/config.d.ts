@@ -136,6 +136,26 @@ declare namespace LX {
      * 是否禁用数据收集
      */
     disableTelemetry?: boolean
+
+    /**
+     * 后台管理界面访问路径，默认为空字符串（表示根路径 /）
+     */
+    'admin.path'?: string
+
+    /**
+     * Web播放器访问路径，默认为 /music
+     */
+    'player.path'?: string
+
+    /**
+     * 是否启用 Subsonic 协议支持 (默认 true)
+     */
+    'subsonic.enable'?: boolean
+
+    /**
+     * Subsonic 访问路径 (默认 /rest)
+     */
+    'subsonic.path'?: string
   }
 }
 

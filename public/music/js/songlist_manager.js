@@ -166,7 +166,18 @@ window.SongListManager = (function () {
             if (descEl) descEl.innerText = '正在拉取详情，请稍后...';
             const statsEl = document.getElementById('sl-detail-stats');
             if (statsEl) statsEl.innerHTML = '';
+
+            // Reset header collapse state
+            const header = document.getElementById('sl-detail-header');
+            const icon = document.getElementById('sl-detail-collapse-icon');
+            if (header && icon && header.classList.contains('is-collapsed')) {
+                header.classList.remove('is-collapsed', 'max-h-0', 'opacity-0', 'py-0', 'border-b-0', 'pointer-events-none');
+                header.classList.add('max-h-[1000px]', 'p-4', 'md:p-6', 'border-b');
+                icon.style.transform = 'rotate(0deg)';
+            }
+
         }
+
 
         try {
             const url = `${API_BASE}/songList/detail?source=${source}&id=${encodeURIComponent(id)}&page=${page}`;
@@ -637,3 +648,29 @@ function formatPlayCount(count) {
     if (count > 10000) return (count / 10000).toFixed(1) + '万';
     return count;
 }
+
+/**
+ * Toggle the visibility of the song list detail header (cover, description, etc.)
+ * to allow more space for the song list itself.
+ */
+function toggleSlDetailHeader() {
+    const header = document.getElementById('sl-detail-header');
+    const icon = document.getElementById('sl-detail-collapse-icon');
+    if (!header || !icon) return;
+
+    const isCollapsed = header.classList.contains('is-collapsed');
+
+    if (isCollapsed) {
+        // Restore
+        header.classList.remove('is-collapsed', 'max-h-0', 'opacity-0', 'py-0', 'border-b-0', 'pointer-events-none');
+        header.classList.add('max-h-[1000px]', 'p-4', 'md:p-6', 'border-b');
+        icon.style.transform = 'rotate(0deg)';
+    } else {
+        // Collapse
+        header.classList.remove('max-h-[1000px]', 'p-4', 'md:p-6', 'border-b');
+        header.classList.add('is-collapsed', 'max-h-0', 'opacity-0', 'py-0', 'border-b-0', 'pointer-events-none');
+        icon.style.transform = 'rotate(180deg)';
+    }
+}
+
+

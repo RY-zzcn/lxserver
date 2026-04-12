@@ -489,6 +489,75 @@ const saveUsers = () => {
   }
 }
 
+/** [新增] 服务器内部热重载数据 */
+const reloadServerData = async () => {
+  startupLog.info('Hot-reloading server data (users and config)...')
+
+  // 1. 重新加载 config.js (必须先加载基础配置)
+  const configPath = process.env.CONFIG_PATH || path.join(process.cwd(), 'config.js')
+  if (fs.existsSync(configPath)) {
+    try {
+      delete require.cache[require.resolve(configPath)]
+      const rootConfig = require(configPath)
+
+      // 合并除 users 以外的配置项
+      for (const key of Object.keys(rootConfig)) {
+        if (key !== 'users') {
+          (global.lx.config as any)[key] = rootConfig[key]
+        }
+      }
+
+      // 如果有 WebDAV 同步实例，手动同步其配置
+      if (global.lx.webdavSync) {
+        global.lx.webdavSync.updateConfig({
+          url: global.lx.config['webdav.url'],
+          username: global.lx.config['webdav.username'],
+          password: global.lx.config['webdav.password'],
+          interval: global.lx.config['sync.interval'],
+        })
+      }
+      startupLog.info('Config.js re-loaded and merged.')
+    } catch (err: any) {
+      startupLog.error('Failed to reload config.js:', err.message)
+    }
+  }
+
+  // 2. 重新加载 users.json (users.json 权重更高，会覆盖 config.js 中的 users)
+  const usersJsonPath = path.join(global.lx.dataPath, 'users.json')
+  if (fs.existsSync(usersJsonPath)) {
+    try {
+      const usersRaw = fs.readFileSync(usersJsonPath, 'utf-8')
+      const users = JSON.parse(usersRaw)
+      if (Array.isArray(users)) {
+        global.lx.config.users = users.map(u => ({
+          ...u,
+          dataPath: path.join(global.lx.userPath, getUserDirname(u.name))
+        }))
+
+        // 确保新加载的所有用户目录存在
+        for (const user of global.lx.config.users) {
+          if (!fs.existsSync(user.dataPath)) {
+            fs.mkdirSync(user.dataPath, { recursive: true })
+          }
+        }
+        startupLog.info(`Reloaded ${global.lx.config.users.length} users from users.json`)
+      }
+    } catch (err: any) {
+      startupLog.error('Failed to reload users.json:', err.message)
+    }
+  }
+
+  // 3. 重新初始化 User APIs (解决脚本源实时生效问题)
+  try {
+    await initUserApis()
+    startupLog.info('User APIs re-initialized.')
+  } catch (err: any) {
+    startupLog.error('Failed to re-init user APIs:', err.message)
+  }
+
+  return true
+}
+
 const checkAndCreateDir = (p: string) => {
   try {
     if (!fs.existsSync(p)) {
@@ -578,59 +647,67 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
     const urlObj = new URL(req.url ?? '', `http://${req.headers.host}`)
     const pathname = urlObj.pathname
 
-    // Serve Music Player Static Files
-    if (pathname.startsWith('/music')) {
-      // 白名单：登录页、静态资源无需认证
-      const isLoginPage = pathname === '/music/login' || pathname === '/music/login.html'
-      const isPublicAsset = pathname.startsWith('/music/assets/') ||
-        pathname.startsWith('/music/css/') ||
-        pathname.startsWith('/music/js/') ||
-        pathname === '/music/manifest.json' ||
-        pathname === '/music/sw.js'
+    // 读取路径配置（每次请求都重新读取，保存后立刻生效）
+    const normalizePath = (p: string) => (p || '').replace(/\/+$/, '')
+    const playerPath = global.lx.config['player.path'] || '/music'
+    const adminPath = global.lx.config['admin.path'] || ''
 
-      // 认证检查：仅对主页面（非白名单）进行保护
+    // 映射播放器逻辑 (无论是自定义路径还是前端硬编码的 /music/)
+    const isPlayerRequest = pathname.startsWith(playerPath + '/') || pathname === playerPath
+
+    // 修复：只兼容旧版硬编码引用的静态资源，不再兼容打开 /music 页面本身，这样/music就无法作为网页直接打开了
+    const isLegacyPlayerAsset = playerPath !== '/music' && (
+      pathname.startsWith('/music/assets/') ||
+      pathname.startsWith('/music/css/') ||
+      pathname.startsWith('/music/js/') ||
+      pathname.startsWith('/music/fonts/') ||
+      pathname.startsWith('/music/img/') ||
+      pathname === '/music/manifest.json' ||
+      pathname === '/music/sw.js'
+    )
+
+    if (isPlayerRequest || isLegacyPlayerAsset) {
+      const activePrefix = isPlayerRequest ? playerPath : '/music'
+      // 白名单：登录页、静态资源无需认证
+      const isLoginPage = pathname === `${activePrefix}/login` || pathname === `${activePrefix}/login.html`
+      const isPublicAsset = pathname.startsWith(`${activePrefix}/assets/`) ||
+        pathname.startsWith(`${activePrefix}/css/`) ||
+        pathname.startsWith(`${activePrefix}/js/`) ||
+        pathname.startsWith(`${activePrefix}/fonts/`) ||
+        pathname.startsWith(`${activePrefix}/img/`) ||
+        pathname === `${activePrefix}/manifest.json` ||
+        pathname === `${activePrefix}/sw.js` ||
+        isLegacyPlayerAsset
+
+      // 认证检查
       if (!isLoginPage && !isPublicAsset && global.lx.config['player.enableAuth']) {
         if (!checkPlayerAuth(req)) {
-          res.writeHead(302, { 'Location': '/music/login' })
+          res.writeHead(302, { 'Location': `${playerPath}/login` })
           res.end()
           return
         }
       }
 
-      // Defaults to index.html if exactly /music or /music/
+      // 规范化物理路径
       let targetPath = pathname
-      if (pathname === '/music' || pathname === '/music/') {
+      // 将请求路径中的前缀映射到真实的 /music 物理目录
+      const subPath = pathname.slice(activePrefix.length)
+      if (subPath === '' || subPath === '/') {
         targetPath = '/music/index.html'
       } else if (isLoginPage) {
         targetPath = '/music/login.html'
+      } else {
+        targetPath = '/music' + subPath
       }
-      // public/music/xxx
-      // global.lx.staticPath points to `public`
+
       const filePath = path.join(global.lx.staticPath, targetPath)
-      serveStatic(req, res, filePath)
-      return
-    }
-
-    // [修正] 增强映射根路径 / 到后端管理界面
-    if (pathname === '/' || pathname === '/index.html') {
-      const rootHtmlPath = path.join(global.lx.staticPath, 'index.html')
-      if (fs.existsSync(rootHtmlPath)) {
-        serveStatic(req, res, rootHtmlPath)
+      if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+        serveStatic(req, res, filePath)
         return
       }
     }
 
-    // [新增] 全局静态文件兜底 (处理根目录下的 style.css, app.js, icon.svg 等)
-    if (!pathname.startsWith('/api/')) {
-      const generalFilePath = path.join(global.lx.staticPath, pathname)
-      if (fs.existsSync(generalFilePath) && fs.statSync(generalFilePath).isFile()) {
-        serveStatic(req, res, generalFilePath)
-        return
-      }
-    }
-
-    // 动态 config.js - 从静态文件读取版本号, 合并服务端配置注入 window.CONFIG
-    // 配置优先级: 环境变量 > 根目录 config.js > src/defaultConfig.ts
+    // [动态配置注入] 优先拦截 /js/config.js 请求，确保后端配置能注入到前端 window.CONFIG
     if (pathname === '/js/config.js') {
       // 从静态文件读取版本号和构建哈希
       const staticConfigPath = path.join(global.lx.staticPath, 'js', 'config.js')
@@ -644,7 +721,7 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
         if (matchHash) buildHash = matchHash[1]
       } catch { }
 
-      // 构造前端配置 (不含敏感字段如密码)
+      // 构造前端配置 暴露给前端
       const frontendConfig = {
         version,
         buildHash,
@@ -659,6 +736,8 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
         'player.enableAuth': global.lx.config['player.enableAuth'] || false,
         port: global.lx.config.port,
         bindIP: global.lx.config.bindIP,
+        'admin.path': global.lx.config['admin.path'] ?? '',
+        'player.path': global.lx.config['player.path'] ?? '/music',
       }
 
       const configJs = `window.CONFIG = ${JSON.stringify(frontendConfig, null, 2)};`
@@ -669,6 +748,45 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
       res.end(configJs)
       return
     }
+
+    // [管理界面]
+    const effectiveAdminPath = adminPath || '/'
+    const isAdminPath = (pathname === effectiveAdminPath || pathname === effectiveAdminPath + '/' || pathname === effectiveAdminPath + '/index.html')
+
+    if (isAdminPath) {
+      const rootHtmlPath = path.join(global.lx.staticPath, 'index.html')
+      if (fs.existsSync(rootHtmlPath)) {
+        serveStatic(req, res, rootHtmlPath)
+        return
+      }
+    }
+
+    // 注意：如果设置了 adminPath，则不允许通过 / 直接访问后台资源文件，除非它是公共资源
+    if (!pathname.startsWith('/api/')) {
+      const generalFilePath = path.join(global.lx.staticPath, pathname)
+      // 禁止绕过 adminPath 直接访问后台 index.html
+      if (pathname === '/' || pathname === '/index.html') {
+        if (adminPath !== '') {
+          res.writeHead(404)
+          res.end('Not Found')
+          return
+        }
+      }
+
+      if (fs.existsSync(generalFilePath) && fs.statSync(generalFilePath).isFile()) {
+        serveStatic(req, res, generalFilePath)
+        return
+      }
+    }
+
+    // [Subsonic API]
+    const subsonicEnable = global.lx.config['subsonic.enable']
+    const subsonicPath = normalizePath(global.lx.config['subsonic.path'] || '/rest')
+    if (subsonicEnable && (pathname.startsWith(subsonicPath + '/') || pathname === subsonicPath)) {
+      const { subsonicHandler } = require('./subsonic')
+      return subsonicHandler.handleRequest(req, res, urlObj)
+    }
+
 
     if (pathname.startsWith('/api/')) {
 
@@ -705,11 +823,55 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
           return
         }
 
+        const totalMem = os.totalmem()
+        const freeMem = os.freemem()
+
+        // 重新实现更准确的 CPU 使用率计算（支持 Windows）
+        const getSystemCpuUsage = () => {
+          const cpus = os.cpus()
+          let idle = 0; let total = 0
+          cpus.forEach(cpu => {
+            for (const type in cpu.times) { total += (cpu.times as any)[type] }
+            idle += cpu.times.idle
+          })
+          const last = global.lx.lastCpuSample || { idle: 0, total: 0 }
+          const deltaIdle = idle - last.idle
+          const deltaTotal = total - last.total
+          global.lx.lastCpuSample = { idle, total }
+          if (deltaTotal === 0) return '0.00'
+          return (100 * (1 - deltaIdle / deltaTotal)).toFixed(2)
+        }
+
+        const getProcessCpuUsage = () => {
+          const currentUsage = process.cpuUsage()
+          const currentTime = Date.now()
+          const last = global.lx.lastProcessSample || { cpu: process.cpuUsage(), time: Date.now() - 100 }
+          const deltaUsage = {
+            user: currentUsage.user - last.cpu.user,
+            system: currentUsage.system - last.cpu.system,
+          }
+          const deltaTime = (currentTime - last.time) * 1000 // microseconds
+          global.lx.lastProcessSample = { cpu: currentUsage, time: currentTime }
+          if (deltaTime === 0) return '0.00'
+          return ((deltaUsage.user + deltaUsage.system) / deltaTime / os.cpus().length * 100).toFixed(2)
+        }
+
         const status = {
           users: global.lx.config.users.length,
           devices: wss?.clients.size ?? 0,
           uptime: process.uptime(),
-          memory: process.memoryUsage().rss
+          memory: process.memoryUsage().rss,
+          totalMemory: totalMem,
+          freeMemory: freeMem,
+          systemMemoryUsage: ((totalMem - freeMem) / totalMem * 100).toFixed(2),
+          processMemoryUsage: (process.memoryUsage().rss / totalMem * 100).toFixed(2),
+          cpuUsage: getSystemCpuUsage(),
+          processCpuUsage: getProcessCpuUsage(),
+          osUptime: os.uptime(),
+          cpus: os.cpus().length,
+          cpuModel: os.cpus()[0]?.model || 'Unknown',
+          cpuSpeed: os.cpus()[0]?.speed || 0,
+          isWebDAVConfigured: !!(global.lx.config['webdav.url'] && global.lx.config['webdav.username']),
         }
 
         res.writeHead(200, {
@@ -1234,6 +1396,35 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
 
         try {
           const body = await readBody(req)
+          let finalData = body
+
+          // [核心兼容性修复] 检测是否为落雪音乐离线备份格式 (playList_v2)
+          try {
+            const jsonData = JSON.parse(body)
+            if (jsonData && jsonData.type === 'playList_v2' && Array.isArray(jsonData.data)) {
+              startupLog.info(`[Snapshot] Detected LX Music backup format for user ${verifiedUser}, converting back to internal format...`)
+
+              // 寻找默认列表
+              const defaultList = jsonData.data.find((l: any) => l.id === 'default')?.list || []
+              // 寻找收藏列表
+              const loveList = jsonData.data.find((l: any) => l.id === 'love')?.list || []
+              // 其他所有列表均作为用户列表
+              const userList = jsonData.data.filter((l: any) => l.id !== 'default' && l.id !== 'love')
+
+              // 拼装为服务器内部快照格式
+              const internalFormat = {
+                defaultList,
+                loveList,
+                userList
+              }
+
+              // 压缩为单行 JSON 以节省磁盘空间并保持与原生快照一致的大小
+              finalData = JSON.stringify(internalFormat)
+              startupLog.info(`[Snapshot] Conversion complete for user ${verifiedUser}.`)
+            }
+          } catch (parseErr) {
+            // 解析失败说明不是标准的 JSON 格式或已经是原始快照，保持原样即可
+          }
 
           // 处理文件名：如果以 snapshot_ 开头，则去掉（因为 saveSnapshotWithTime 会自动加）
           // 如果不以 snapshot_ 开头，则保持原样（saveSnapshotWithTime 会自动加 snapshot_ 前缀）
@@ -1243,7 +1434,7 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
           }
 
           // 调用 ListManage 中的 saveSnapshotWithTime 方法
-          await userSpace.listManage.saveSnapshotWithTime(name, body, time)
+          await userSpace.listManage.saveSnapshotWithTime(name, finalData, time)
 
           res.writeHead(200, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({ success: true }))
@@ -1862,7 +2053,7 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
       if (pathname === '/api/music/cache/download' && req.method === 'POST') {
         void readBody(req).then(body => {
           try {
-            const { songInfo, url, quality } = JSON.parse(body)
+            const { songInfo, url, quality, enableOnlyDownloadMode } = JSON.parse(body)
             if (!songInfo || !url) {
               res.writeHead(400)
               res.end('Missing params')
@@ -1895,9 +2086,9 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
             }
             userTasks.push({ songKey, controller })
 
-            void fileCache.downloadAndCache(songInfo, url, quality, username, controller.signal)
+            void fileCache.downloadAndCache(songInfo, url, quality, username, controller.signal, !!enableOnlyDownloadMode)
               .then(() => console.log(`[Cache] Downloaded ${songInfo.name} for ${username || '_open'}`))
-              .catch(err => {
+              .catch((err: any) => {
                 if (err.message === 'Aborted') {
                   console.log(`[Cache] Task aborted for ${songInfo.name}`)
                 } else {
@@ -3457,6 +3648,10 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
             'sync.interval': global.lx.config['sync.interval'] || 60,
             'proxy.all.enabled': global.lx.config['proxy.all.enabled'] || false,
             'proxy.all.address': global.lx.config['proxy.all.address'] || '',
+            'admin.path': global.lx.config['admin.path'] ?? '',
+            'player.path': global.lx.config['player.path'] ?? '/music',
+            'subsonic.enable': global.lx.config['subsonic.enable'] ?? true,
+            'subsonic.path': global.lx.config['subsonic.path'] ?? '/rest',
           }
           res.writeHead(200, {
             'Content-Type': 'application/json',
@@ -3511,6 +3706,43 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
               if (newConfig['proxy.all.enabled'] !== undefined) global.lx.config['proxy.all.enabled'] = newConfig['proxy.all.enabled']
               if (newConfig['proxy.all.address'] !== undefined) global.lx.config['proxy.all.address'] = newConfig['proxy.all.address']
 
+              // URL路径配置校验与更新
+              if (newConfig['admin.path'] !== undefined || newConfig['player.path'] !== undefined) {
+                const adminPath = (newConfig['admin.path'] !== undefined ? newConfig['admin.path'] : global.lx.config['admin.path']) || ''
+                const playerPath = (newConfig['player.path'] !== undefined ? newConfig['player.path'] : global.lx.config['player.path']) || '/music'
+                const normalizedAdmin = adminPath.replace(/\/+$/, '')
+                const normalizedPlayer = playerPath.replace(/\/+$/, '')
+
+                if (!normalizedPlayer || !normalizedPlayer.startsWith('/')) {
+                  res.writeHead(422, { 'Content-Type': 'application/json' })
+                  res.end(JSON.stringify({ success: false, error: '播放器路径不能为空且必须以 / 开头' }))
+                  return
+                }
+                if (normalizedAdmin !== '' && !normalizedAdmin.startsWith('/')) {
+                  res.writeHead(422, { 'Content-Type': 'application/json' })
+                  res.end(JSON.stringify({ success: false, error: '后台路径必须以 / 开头或为空' }))
+                  return
+                }
+                if ((normalizedAdmin || '/') === normalizedPlayer) {
+                  res.writeHead(422, { 'Content-Type': 'application/json' })
+                  res.end(JSON.stringify({ success: false, error: '后台管理路径与播放器路径不能相同' }))
+                  return
+                }
+                if (normalizedAdmin.startsWith('/api') || normalizedPlayer.startsWith('/api')) {
+                  res.writeHead(422, { 'Content-Type': 'application/json' })
+                  res.end(JSON.stringify({ success: false, error: '路径不能以 /api 开头' }))
+                  return
+                }
+                global.lx.config['admin.path'] = normalizedAdmin
+                global.lx.config['player.path'] = normalizedPlayer
+              }
+
+              // 新增：Subsonic 配置保存逻辑
+              if (newConfig['subsonic.enable'] !== undefined) global.lx.config['subsonic.enable'] = newConfig['subsonic.enable']
+              if (newConfig['subsonic.path'] !== undefined) {
+                global.lx.config['subsonic.path'] = newConfig['subsonic.path'].replace(/\/+$/, '') || '/rest'
+              }
+
               // 更新 WebDAVSync 配置
               if (global.lx.webdavSync && (newConfig['webdav.url'] || newConfig['webdav.username'] || newConfig['webdav.password'] || newConfig['sync.interval'])) {
                 global.lx.webdavSync.updateConfig({
@@ -3540,6 +3772,10 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
                 'sync.interval': global.lx.config['sync.interval'],
                 'proxy.all.enabled': global.lx.config['proxy.all.enabled'],
                 'proxy.all.address': global.lx.config['proxy.all.address'],
+                'admin.path': global.lx.config['admin.path'] ?? '',
+                'player.path': global.lx.config['player.path'] ?? '/music',
+                'subsonic.enable': global.lx.config['subsonic.enable'],
+                'subsonic.path': global.lx.config['subsonic.path'],
                 users: global.lx.config.users.map(u => ({
                   name: u.name,
                   password: u.password,
@@ -3795,7 +4031,10 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
           return
         }
 
-        void webdavSync.restoreFromRemote().then((success: boolean) => {
+        void webdavSync.restoreFromRemote().then(async (success: boolean) => {
+          if (success) {
+            await reloadServerData()
+          }
           res.writeHead(200, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({ success }))
         })
@@ -3914,13 +4153,33 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
             // 删除临时上传的文件
             if (fs.existsSync(file.filepath)) fs.unlinkSync(file.filepath)
 
+            // [新增] 还原后自动触发重载
+            await reloadServerData()
+
             res.writeHead(200, { 'Content-Type': 'application/json' })
-            res.end(JSON.stringify({ success: true, message: 'Restore from local ZIP success' }))
+            res.end(JSON.stringify({ success: true, message: 'Restore from local ZIP success and reloaded' }))
           } catch (restoreErr: any) {
             console.error('Local Restore Error:', restoreErr)
             res.writeHead(500); res.end('Restore failed: ' + restoreErr.message)
           }
         })
+        return
+      }
+
+      // [新增] 管理重载 API
+      if (pathname === '/api/admin/reload' && req.method === 'POST') {
+        const auth = req.headers['x-frontend-auth']
+        if (auth !== global.lx.config['frontend.password']) {
+          res.writeHead(401); res.end('Unauthorized'); return
+        }
+
+        try {
+          await reloadServerData()
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ success: true, message: 'Server data reloaded from disk' }))
+        } catch (err: any) {
+          res.writeHead(500); res.end(err.message)
+        }
         return
       }
 
@@ -4169,6 +4428,13 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
         void authCode(req, res, global.lx.config.users, targetUserName)
         break
       default:
+        // 如果设置了独立后台路径，兜底拦截根目录访问请求
+        if (global.lx.config['admin.path'] && (pathname === '/' || pathname === '/index.html')) {
+          code = 404
+          msg = 'Not Found'
+          break
+        }
+
         // Serve static files
         // If root, serve index.html
         let filePath = path.join(process.cwd(), 'public', pathname === '/' ? 'index.html' : pathname)

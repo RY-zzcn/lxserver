@@ -67,6 +67,10 @@ let tray = null
 let playerWindow = null  // 播放器窗口（常驻，关闭只隐藏）
 let adminWindow = null   // 管理后台窗口（可正常关闭）
 
+// 获取当前路径工具函数
+const getPlayerPath = () => (global.lx && global.lx.config && global.lx.config['player.path']) || '/music'
+const getAdminPath = () => (global.lx && global.lx.config && global.lx.config['admin.path']) || ''
+
 const appRoot = app.getAppPath()
 const staticPath = app.isPackaged
     ? path.join(appRoot + '.unpacked', 'public')
@@ -118,9 +122,10 @@ function getIcon(name) {
 }
 
 
+
 // ─── 播放器窗口管理（常驻，关闭只隐藏，保持音乐播放） ──────────────────────────
 function showPlayerWindow() {
-    const playerURL = `${BASE_URL}/music`
+    const playerURL = `${BASE_URL}${getPlayerPath()}`
 
     if (!playerWindow || playerWindow.isDestroyed()) {
         playerWindow = new BrowserWindow({
@@ -156,7 +161,8 @@ function showPlayerWindow() {
 
 // ─── 管理后台窗口管理（独立窗口，不影响播放器） ────────────────────────────────
 function showAdminWindow() {
-    const adminURL = BASE_URL
+    const adminPath = getAdminPath()
+    const adminURL = adminPath ? `${BASE_URL}${adminPath}` : BASE_URL
 
     if (!adminWindow || adminWindow.isDestroyed()) {
         adminWindow = new BrowserWindow({

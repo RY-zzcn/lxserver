@@ -127,14 +127,6 @@
                     <span>WebDAV同步</span>
                 </a>
 
-                <!-- 新增：文件管理菜单 -->
-                <a href="#" class="nav-item" data-view="files">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-                        <polyline points="13 2 13 9 20 9" />
-                    </svg>
-                    <span>文件管理</span>
-                </a>
 
                 <a href="#" class="nav-item" data-view="snapshots">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -156,15 +148,6 @@
                     <span>系统日志</span>
                 </a>
 
-                <!-- 新增：Web播放器菜单 -->
-                <a href="#" class="nav-item" data-view="music">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M9 18V5l12-2v13"></path>
-                        <circle cx="6" cy="18" r="3"></circle>
-                        <circle cx="21" cy="16" r="3"></circle>
-                    </svg>
-                    <span>Web播放器</span>
-                </a>
 
                 <a href="#" class="nav-item" data-view="about">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -175,6 +158,25 @@
                     <span>关于</span>
                 </a>
             </nav>
+
+            <div class="sidebar-divider"></div>
+            <div class="sidebar-nav-bottom">
+                <a href="#" class="nav-item" data-view="files">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+                        <polyline points="13 2 13 9 20 9" />
+                    </svg>
+                    <span>文件管理</span>
+                </a>
+                <a href="#" class="nav-item" id="nav-player-link" data-view="music">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 18V5l12-2v13"></path>
+                        <circle cx="6" cy="18" r="3"></circle>
+                        <circle cx="21" cy="16" r="3"></circle>
+                    </svg>
+                    <span>Web播放器</span>
+                </a>
+            </div>
 
             <div
                 style="padding: 15px 20px; font-size: 12px; color: rgba(255, 255, 255, 0.4); text-align: center; line-height: 1.5;">
@@ -196,18 +198,19 @@
         <main class="main-content">
             <header class="top-bar glass">
                 <div class="header-left-group">
-                    <button id="mobile-menu-btn" class="btn-icon mobile-only"
-                        style="display: none; margin-right: 1rem;">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                            style="width: 24px; height: 24px;">
-                            <line x1="3" y1="12" x2="21" y2="12"></line>
-                            <line x1="3" y1="6" x2="21" y2="6"></line>
-                            <line x1="3" y1="18" x2="21" y2="18"></line>
-                        </svg>
-                    </button>
-                    <h2 id="page-title">仪表盘</h2>
-                    <span id="console-version"
-                        class="text-xs font-mono bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full ml-3 hidden md:inline-block"></span>
+                    <div class="mobile-header-row">
+                        <button id="mobile-menu-btn" class="btn-icon mobile-only" style="display: none;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                style="width: 24px; height: 24px;">
+                                <line x1="3" y1="12" x2="21" y2="12"></line>
+                                <line x1="3" y1="6" x2="21" y2="6"></line>
+                                <line x1="3" y1="18" x2="21" y2="18"></line>
+                            </svg>
+                        </button>
+                        <h2 id="page-title">仪表盘</h2>
+                        <span id="console-version"
+                            class="text-xs font-mono bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full ml-3 hidden md:inline-block"></span>
+                    </div>
                 </div>
                 <div class="top-bar-actions">
                     <button id="install-pwa-btn" class="btn-secondary" title="安装 PWA 应用"
@@ -220,12 +223,8 @@
                         </svg>
                         <span>安装应用</span>
                     </button>
-                    <div class="status-indicator">
-                        <span class="status-dot"></span>
-                        <span id="server-status">服务器运行中</span>
-                    </div>
                     <button id="restart-server-btn" class="btn-secondary" title="重启服务器"
-                        style="margin-left: 1rem; padding: 0.5rem 1rem; font-size: 0.875rem;">
+                        style="padding: 0.5rem 1rem; font-size: 0.875rem;">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                             style="width: 16px; height: 16px;">
                             <polyline points="23 4 23 10 17 10" />
@@ -233,6 +232,10 @@
                         </svg>
                         <span>重启服务器</span>
                     </button>
+                    <div class="status-indicator" style="margin-left: 1rem;">
+                        <span class="status-dot"></span>
+                        <span id="server-status">服务器运行中</span>
+                    </div>
                     <a href="https://github.com/XCQ0607/lxserver" target="_blank" class="btn-secondary"
                         title="查看 GitHub 项目"
                         style="margin-left: 1rem; padding: 0.5rem 1rem; font-size: 0.875rem; text-decoration: none; display: flex; align-items: center; color: inherit;">
@@ -248,31 +251,76 @@
             <div class="content-wrapper">
                 <!-- 仪表盘视图 -->
                 <div id="view-dashboard" class="view active">
+                    <div class="welcome-section">
+                        <h1><span id="greeting-text" class="greeting-text">你好</span>，管理员 👋</h1>
+                        <p id="dashboard-date">欢迎回到 LX Sync Server 管理控制台</p>
+                    </div>
+
                     <div class="stats-grid">
-                        <div class="stat-card glass stat-clickable" onclick="app.switchView('users')">
-                            <div class="stat-icon users-icon">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                                    <circle cx="9" cy="7" r="4" />
-                                    <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-                                </svg>
+                        <!-- 用户与设备合并卡片 -->
+                        <div class="stat-card glass stat-clickable stat-card-dual" onclick="app.switchView('users')">
+                            <div class="stat-dual-section">
+                                <div class="stat-icon users-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                        <circle cx="9" cy="7" r="4" />
+                                    </svg>
+                                </div>
+                                <div class="stat-dual-info">
+                                    <h3>用户总数</h3>
+                                    <p id="stat-users" class="stat-value">0</p>
+                                </div>
                             </div>
-                            <div class="stat-content">
-                                <h3>用户总数</h3>
-                                <p id="stat-users" class="stat-value">0</p>
+                            <div class="stat-dual-divider"></div>
+                            <div class="stat-dual-section">
+                                <div class="stat-icon devices-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+                                        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+                                    </svg>
+                                </div>
+                                <div class="stat-dual-info">
+                                    <h3>在线设备</h3>
+                                    <p id="stat-devices" class="stat-value">0</p>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="stat-card glass stat-clickable" onclick="app.switchView('users')">
-                            <div class="stat-icon devices-icon">
+                        <!-- 负载双显示卡片 -->
+                        <div class="stat-card glass">
+                            <div class="stat-icon cpu-icon">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
-                                    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+                                    <rect x="4" y="4" width="16" height="16" rx="2" />
+                                    <path d="M9 9h6v6H9zM9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3" />
                                 </svg>
                             </div>
                             <div class="stat-content">
-                                <h3>在线设备</h3>
-                                <p id="stat-devices" class="stat-value">0</p>
+                                <h3>CPU 负载 (系统/软件)</h3>
+                                <div class="stat-value-pair">
+                                    <span id="stat-cpu" class="stat-value">0%</span>
+                                    <span class="stat-value-secondary">/ <span id="stat-process-cpu">0%</span></span>
+                                </div>
+                                <p id="stat-cpu-info" class="stat-value-small"
+                                    style="margin-top: 4px; opacity: 0.5; font-size: 0.75rem;">- Cores</p>
+                            </div>
+                        </div>
+
+                        <div class="stat-card glass">
+                            <div class="stat-icon memory-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                    stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                                </svg>
+                            </div>
+                            <div class="stat-content">
+                                <h3>内存占比 (系统/软件)</h3>
+                                <div class="stat-value-pair">
+                                    <span id="stat-memory-percent" class="stat-value">0%</span>
+                                    <span class="stat-value-secondary">/ <span
+                                            id="stat-process-memory-percent">0%</span></span>
+                                </div>
+                                <p id="stat-memory" class="stat-value-small"
+                                    style="margin-top: 4px; opacity: 0.5; font-size: 0.75rem;">0 MB</p>
                             </div>
                         </div>
 
@@ -288,22 +336,64 @@
                                 <p id="stat-uptime" class="stat-value">0h</p>
                             </div>
                         </div>
+                    </div>
 
-                        <div class="stat-card glass">
-                            <div class="stat-icon memory-icon">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path
-                                        d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-                                    <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
-                                    <polyline points="17 7 22 7 22 12" />
-                                </svg>
+                    <!-- 实时监控面板 -->
+                    <div class="monitor-grid">
+                        <div class="monitor-card glass">
+                            <div class="monitor-card-header">
+                                <div class="monitor-card-title">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                        style="width: 16px; height: 16px;">
+                                        <rect x="4" y="4" width="16" height="16" rx="2" />
+                                        <path d="M9 9h6v6H9z" />
+                                    </svg>
+                                    CPU 实时负载 (%)
+                                </div>
+                                <div class="monitor-card-value">
+                                    <span id="monitor-cpu-val" title="系统总占用">0%</span>
+                                    <span style="font-size: 0.8rem; opacity: 0.6; margin: 0 0.5rem;">/</span>
+                                    <span id="monitor-process-cpu-val" title="后端服务占用"
+                                        style="color: var(--accent-secondary);">0%</span>
+                                </div>
                             </div>
-                            <div class="stat-content">
-                                <h3>内存使用</h3>
-                                <p id="stat-memory" class="stat-value">0 MB</p>
+                            <div class="progress-container">
+                                <div id="monitor-cpu-progress" class="progress-bar-fill" style="width: 0%;"></div>
+                            </div>
+                            <div class="chart-container">
+                                <svg id="cpu-chart" width="100%" height="100%" viewBox="0 0 200 60"
+                                    preserveAspectRatio="none" style="overflow: visible;"></svg>
+                            </div>
+                        </div>
+
+                        <div class="monitor-card glass">
+                            <div class="monitor-card-header">
+                                <div class="monitor-card-title">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                        style="width: 16px; height: 16px;">
+                                        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                                    </svg>
+                                    内存实时占用 (%)
+                                </div>
+                                <div class="monitor-card-value">
+                                    <span id="monitor-mem-val" title="系统总占用">0%</span>
+                                    <span style="font-size: 0.8rem; opacity: 0.6; margin: 0 0.5rem;">/</span>
+                                    <span id="monitor-process-mem-val" title="后端服务占用"
+                                        style="color: var(--accent-primary);">0%</span>
+                                </div>
+                            </div>
+                            <div class="progress-container">
+                                <div id="monitor-mem-progress" class="progress-bar-fill"
+                                    style="width: 0%; background: linear-gradient(90deg, #10b981, #3b82f6);"></div>
+                            </div>
+                            <div class="chart-container">
+                                <svg id="mem-chart" width="100%" height="100%" viewBox="0 0 200 60"
+                                    preserveAspectRatio="none" style="overflow: visible;"></svg>
                             </div>
                         </div>
                     </div>
+
+
 
                     <div class="dash-section-header">
                         <h3>快速操作</h3>
@@ -357,44 +447,80 @@
                 <!-- 用户管理视图 -->
                 <div id="view-users" class="view">
                     <div class="view-header">
-                        <button id="add-user-btn" class="btn-primary">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                                style="width:16px;height:16px;">
-                                <line x1="12" y1="5" x2="12" y2="19" />
-                                <line x1="5" y1="12" x2="19" y2="12" />
-                            </svg>
-                            <span>添加用户</span>
-                        </button>
-                        <button id="batch-delete-users-btn" class="btn-danger"
-                            style="display: none; margin-left: 10px;">
-                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <polyline points="3 6 5 6 21 6" />
-                                <path
-                                    d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                            </svg>
-                            批量删除 (<span id="user-selected-count">0</span>)
-                        </button>
-                    </div>
-                    <div class="users-table-header glass" style="border-radius:12px 12px 0 0; margin-bottom:0;">
-                        <div class="col-checkbox">
-                            <input type="checkbox" id="select-all-users">
+                        <div class="header-main-actions">
+                            <button id="add-user-btn" class="btn-primary">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                    style="width:18px;height:18px;">
+                                    <line x1="12" y1="5" x2="12" y2="19" />
+                                    <line x1="5" y1="12" x2="19" y2="12" />
+                                </svg>
+                                <span>添加用户</span>
+                            </button>
+                            <div class="search-box">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="11" cy="11" r="8" />
+                                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                                </svg>
+                                <input type="text" id="user-search-input" placeholder="输入用户名搜索..."
+                                    oninput="app.filterUsers()">
+                            </div>
                         </div>
-                        <div class="col-name">用户名</div>
-                        <div class="col-password">密码</div>
-                        <div class="col-status">状态</div>
-                        <div class="col-actions">操作</div>
+                        <div class="header-side-actions">
+                            <button id="refresh-users-btn" class="btn-secondary" title="刷新用户列表">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                    style="width:16px;height:16px;">
+                                    <polyline points="23 4 23 10 17 10" />
+                                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                                </svg>
+                                <span>刷新</span>
+                            </button>
+                            <button id="batch-delete-users-btn" class="btn-danger" style="display: none;">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <polyline points="3 6 5 6 21 6" />
+                                    <path
+                                        d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                </svg>
+                                批量删除 (<span id="user-selected-count">0</span>)
+                            </button>
+                        </div>
                     </div>
-                    <div id="users-list" class="users-table-body"></div>
+                    <div class="users-list-wrapper">
+                        <div class="users-table-header">
+                            <div class="col-checkbox">
+                                <input type="checkbox" id="select-all-users">
+                            </div>
+                            <div class="col-name">用户名</div>
+                            <div class="col-password">密码</div>
+                            <div class="col-status">状态</div>
+                            <div class="col-actions">操作</div>
+                        </div>
+                        <div id="users-list" class="users-table-body"></div>
+                    </div>
                 </div>
 
 
                 <!-- 数据查看视图 -->
                 <div id="view-data" class="view">
                     <div class="view-header">
-                        <select id="data-user-select" class="select-input">
-                            <option value="">选择用户</option>
-                        </select>
+                        <div class="custom-user-selector" id="data-user-selector">
+                            <div class="selector-trigger" onclick="app.toggleUserDropdown('data')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                    class="selector-icon">
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="12" cy="7" r="4"></circle>
+                                </svg>
+                                <span class="selected-username">选择用户</span>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                    class="chevron-icon">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </div>
+                            <div class="selector-dropdown hidden" id="data-user-dropdown">
+                                <!-- 用户列表将通过 JS 动态渲染 -->
+                            </div>
+                        </div>
+                        <input type="hidden" id="data-user-select" value="">
                         <button id="refresh-data-btn" class="btn-secondary">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="23 4 23 10 17 10" />
@@ -562,7 +688,7 @@
                         </div>
 
                         <!-- WebDAV 配置卡片 -->
-                        <div class="config-card glass">
+                        <div id="config-card-webdav" class="config-card glass">
                             <div class="config-card-header">
                                 <div class="config-card-icon"
                                     style="background: linear-gradient(135deg, #f59e0b, #d97706);">
@@ -647,6 +773,77 @@
                             </div>
                         </div>
 
+                        <!-- URL路径配置卡片 -->
+                        <div class="config-card glass">
+                            <div class="config-card-header">
+                                <div class="config-card-icon"
+                                    style="background: linear-gradient(135deg, #06b6d4, #0891b2);">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h3 class="config-card-title">访问路径配置</h3>
+                                    <p class="config-card-desc">自定义管理界面与播放器的 URL 路径，保存后立刻生效</p>
+                                </div>
+                            </div>
+                            <div class="config-card-body">
+                                <div class="config-field">
+                                    <label class="config-label">后台管理路径</label>
+                                    <input type="text" name="admin.path" id="admin-path-input"
+                                        class="form-input config-input" placeholder="留空表示根路径 /" />
+                                    <small class="config-hint">以 / 开头，留空表示根路径。不能和播放器路径相同，不能以 /api 开头。</small>
+                                </div>
+                                <div class="config-field">
+                                    <label class="config-label">播放器路径</label>
+                                    <input type="text" name="player.path" id="player-path-input"
+                                        class="form-input config-input" placeholder="/music" />
+                                    <small class="config-hint">以 / 开头，不能为空。不能和后台路径相同，不能以 /api 开头。</small>
+                                </div>
+                                <div id="path-conflict-error"
+                                    style="display:none; color: #ef4444; font-size: 0.85rem; margin-top: 4px; padding: 6px 10px; background: rgba(239,68,68,0.08); border-radius: 6px;">
+                                    ⚠️ 路径配置有误，请检查后重试
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Subsonic 协议配置卡片 -->
+                        <div class="config-card glass">
+                            <div class="config-card-header">
+                                <div class="config-card-icon"
+                                    style="background: linear-gradient(135deg, #f43f5e, #e11d48);">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M9 18V5l12-2v13"></path>
+                                        <circle cx="6" cy="18" r="3"></circle>
+                                        <circle cx="18" cy="16" r="3"></circle>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h3 class="config-card-title">Subsonic 协议配置</h3>
+                                    <p class="config-card-desc">启用后支持第三方 Subsonic 客户端（如 PlaySub, Symfonium）</p>
+                                </div>
+                            </div>
+                            <div class="config-card-body">
+                                <div class="config-toggle-row">
+                                    <div class="config-toggle-info">
+                                        <span class="config-toggle-label">启用 Subsonic 服务</span>
+                                        <span class="config-toggle-desc">允许 Subsonic 客户端连接并同步歌单</span>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" name="subsonic.enable" />
+                                        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                                    </label>
+                                </div>
+                                <div class="config-field">
+                                    <label class="config-label">Subsonic 访问路径</label>
+                                    <input type="text" name="subsonic.path" class="form-input config-input"
+                                        placeholder="/rest" />
+                                    <small class="config-hint">Subsonic API 默认路径为 /rest。修改后需在客户端同步更新 URL</small>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- 保存操作栏 -->
                         <div class="config-actions-bar glass">
                             <div class="config-actions-hint">
@@ -659,7 +856,8 @@
                                 <span>配置修改后需要保存方可生效，部分配置需重启服务器</span>
                             </div>
                             <div class="config-actions-btns">
-                                <button type="button" id="reload-config-btn" class="btn-secondary">
+                                <button type="button" id="reload-config-btn" class="btn-secondary"
+                                    style="white-space: nowrap; flex-shrink: 0;">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                                         style="width:15px;height:15px;">
                                         <polyline points="23 4 23 10 17 10" />
@@ -667,7 +865,7 @@
                                     </svg>
                                     重新加载
                                 </button>
-                                <button type="submit" class="btn-primary">
+                                <button type="submit" class="btn-primary" style="white-space: nowrap; flex-shrink: 0;">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                                         style="width:15px;height:15px;">
                                         <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
@@ -686,64 +884,80 @@
                 <div id="view-webdav" class="view">
                     <div class="webdav-container">
                         <!-- 云端操作区 -->
-                        <div class="webdav-group-label">☁️ 云端操作</div>
-                        <div class="sync-actions-grid">
-                            <button id="test-webdav-btn" class="action-card glass">
-                                <div class="action-card-icon"
-                                    style="background: linear-gradient(135deg, #10b981, #059669);">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <circle cx="12" cy="12" r="10" />
-                                        <polyline points="9 12 12 15 16 10" />
-                                    </svg>
-                                </div>
-                                <h4>测试连接</h4>
-                                <p>验证 WebDAV 配置</p>
-                            </button>
-                            <button id="backup-webdav-btn" class="action-card glass">
-                                <div class="action-card-icon"
-                                    style="background: linear-gradient(135deg, #3b82f6, #2563eb);">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                        <polyline points="7 10 12 15 17 10" />
-                                        <line x1="12" y1="15" x2="12" y2="3" />
-                                    </svg>
-                                </div>
-                                <h4>立即备份</h4>
-                                <p>创建全量 ZIP 备份</p>
-                            </button>
-                            <button id="restore-webdav-btn" class="action-card glass">
-                                <div class="action-card-icon"
-                                    style="background: linear-gradient(135deg, #f59e0b, #d97706);">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                        <polyline points="17 8 12 3 7 8" />
-                                        <line x1="12" y1="3" x2="12" y2="15" />
-                                    </svg>
-                                </div>
-                                <h4>从云端恢复</h4>
-                                <p>下载并恢复数据</p>
-                            </button>
-                            <button id="sync-files-btn" class="action-card glass">
-                                <div class="action-card-icon"
-                                    style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <polyline points="23 4 23 10 17 10" />
-                                        <polyline points="1 20 1 14 7 14" />
-                                        <path
-                                            d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                                    </svg>
-                                </div>
-                                <h4>同步文件</h4>
-                                <p>强制同步所有变化</p>
+                        <div id="webdav-cloud-group">
+                            <div class="webdav-group-label">云端操作</div>
+                            <div class="sync-actions-grid">
+                                <button id="test-webdav-btn" class="action-card glass">
+                                    <div class="action-card-icon icon-emerald">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <circle cx="12" cy="12" r="10" />
+                                            <polyline points="9 12 12 15 16 10" />
+                                        </svg>
+                                    </div>
+                                    <h4>测试连接</h4>
+                                    <p>验证 WebDAV 配置</p>
+                                </button>
+                                <button id="backup-webdav-btn" class="action-card glass">
+                                    <div class="action-card-icon icon-blue">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                            <polyline points="7 10 12 15 17 10" />
+                                            <line x1="12" y1="15" x2="12" y2="3" />
+                                        </svg>
+                                    </div>
+                                    <h4>立即备份</h4>
+                                    <p>创建全量 ZIP 备份</p>
+                                </button>
+                                <button id="restore-webdav-btn" class="action-card glass">
+                                    <div class="action-card-icon icon-amber">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                            <polyline points="17 8 12 3 7 8" />
+                                            <line x1="12" y1="3" x2="12" y2="15" />
+                                        </svg>
+                                    </div>
+                                    <h4>从云端恢复</h4>
+                                    <p>下载并恢复数据</p>
+                                </button>
+                                <button id="sync-files-btn" class="action-card glass">
+                                    <div class="action-card-icon icon-purple">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <polyline points="23 4 23 10 17 10" />
+                                            <polyline points="1 20 1 14 7 14" />
+                                            <path
+                                                d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                                        </svg>
+                                    </div>
+                                    <h4>同步文件</h4>
+                                    <p>强制同步所有变化</p>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 引导配置卡片 (默认隐藏) -->
+                        <div id="webdav-config-guide" class="setup-guide-card glass hidden">
+                            <div class="setup-guide-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                    style="width:32px;height:32px;">
+                                    <path
+                                        d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                                    <line x1="12" y1="11" x2="12" y2="17" />
+                                    <line x1="9" y1="14" x2="15" y2="14" />
+                                </svg>
+                            </div>
+                            <h3>云端同步未开启</h3>
+                            <p>配置 WebDAV 后，您可以跨设备同步歌单、配置，并享受云端自动备份服务，数据永不丢失。</p>
+                            <button class="btn-primary" onclick="app.jumpToWebDAVConfig()"
+                                style="margin-top: 1rem; padding: 0.6rem 2rem;">
+                                立即配置 WebDAV
                             </button>
                         </div>
 
                         <!-- 本地操作区 -->
-                        <div class="webdav-group-label" style="margin-top: 1.5rem;">💾 本地备份</div>
+                        <div class="webdav-group-label" style="margin-top: 1.5rem;">本地备份</div>
                         <div class="sync-actions-grid">
                             <button id="backup-local-btn" class="action-card glass border-emerald">
-                                <div class="action-card-icon"
-                                    style="background: linear-gradient(135deg, #10b981, #059669);">
+                                <div class="action-card-icon icon-emerald">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                                         <polyline points="7 10 12 15 17 10" />
@@ -754,8 +968,7 @@
                                 <p>打包并下载 ZIP 到本地</p>
                             </button>
                             <button id="restore-local-btn" class="action-card glass border-amber">
-                                <div class="action-card-icon"
-                                    style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                                <div class="action-card-icon icon-amber">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                                         <polyline points="17 8 12 3 7 8" />
@@ -766,10 +979,10 @@
                                 <p>上传并还原 ZIP 备份</p>
                             </button>
                         </div>
-                        <input type="file" id="local-backup-input" style="display: none;" accept=".zip">
+                        <input type="file" id="local-backup-input" style="display: none;" accept=".zip" />
 
                         <!-- 同步状态 -->
-                        <div class="sync-status-section glass">
+                        <div id="webdav-status-section" class="sync-status-section glass">
                             <div class="sync-section-hd">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                                     style="width:18px;height:18px;color:var(--accent-primary)">
@@ -779,21 +992,12 @@
                                 <h3>同步状态</h3>
                             </div>
                             <div id="sync-status-content">
-                                <p class="sync-empty-tip">暂无状态信息</p>
-                            </div>
-                            <div id="sync-progress-container" class="hidden" style="margin-top: 1rem;">
-                                <div class="progress-header">
-                                    <span id="progress-text">正在处理...</span>
-                                    <span id="progress-percent">0%</span>
-                                </div>
-                                <div class="progress-track">
-                                    <div id="progress-bar" class="progress-fill"></div>
-                                </div>
+                                <p class="sync-empty-tip">暂无同步数据</p>
                             </div>
                         </div>
 
                         <!-- 同步日志 -->
-                        <div class="sync-logs-section glass">
+                        <div id="webdav-logs-section" class="sync-logs-section glass">
                             <div class="logs-header">
                                 <div class="sync-section-hd">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -846,12 +1050,28 @@
                             <h3>快照列表</h3>
                             <p class="text-secondary">查看和管理服务器端的数据快照，支持下载备份或回滚服务器状态。</p>
                         </div>
-                        <div style="display: flex; gap: 10px;">
-                            <select id="snapshot-user-select" class="select-input">
-                                <option value="">选择用户</option>
-                            </select>
+                        <div class="header-side-actions" style="flex-wrap: wrap;">
+                            <div class="custom-user-selector" id="snapshot-user-selector">
+                                <div class="selector-trigger" onclick="app.toggleUserDropdown('snapshot')">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                        class="selector-icon">
+                                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                        <circle cx="12" cy="7" r="4"></circle>
+                                    </svg>
+                                    <span class="selected-username">选择用户</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                        class="chevron-icon">
+                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                    </svg>
+                                </div>
+                                <div class="selector-dropdown hidden" id="snapshot-user-dropdown">
+                                    <!-- 用户列表将通过 JS 动态渲染 -->
+                                </div>
+                            </div>
+                            <input type="hidden" id="snapshot-user-select" value="">
                             <input type="file" id="snapshot-upload-input" style="display: none;" accept=".json">
-                            <button onclick="app.triggerUploadSnapshot()" class="btn-secondary">
+                            <button onclick="app.triggerUploadSnapshot()" class="btn-secondary"
+                                style="white-space: nowrap; flex-shrink: 0;">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                                     <polyline points="17 8 12 3 7 8"></polyline>
@@ -859,7 +1079,8 @@
                                 </svg>
                                 上传
                             </button>
-                            <button onclick="app.loadSnapshots()" class="btn-secondary">
+                            <button onclick="app.loadSnapshots()" class="btn-secondary"
+                                style="white-space: nowrap; flex-shrink: 0;">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M23 4v6h-6"></path>
                                     <path d="M1 20v-6h6"></path>
@@ -905,7 +1126,8 @@
                                 </svg>
                                 检查版本更新
                             </button>
-                            <p style="margin-top: 10px; font-size: 12px; color: var(--text-secondary);">点击检查服务器是否有新版本发布
+                            <p style="margin-top: 10px; font-size: 12px; color: var(--text-secondary);">
+                                点击检查服务器是否有新版本发布
                             </p>
                         </div>
                     </div>
