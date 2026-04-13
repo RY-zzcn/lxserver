@@ -1,4 +1,5 @@
 
+import { fileTypeFromBuffer } from 'file-type'
 import fs from 'fs'
 import path from 'path'
 import http from 'http'
@@ -61,7 +62,7 @@ const getFileName = (songInfo: any, quality?: string, isOnlyDownload?: boolean) 
     }
 
     // Default Cache format: {Name}_-_{Singer}_-_{Source}_-_{ID}_-_{Quality}
-    let name = `${sanitizeFilename(songInfo.name || 'Unknown')}_-_${sanitizeFilename(songInfo.singer || 'Unknown')}_-_${sanitizeFilename(songInfo.source || 'unknown')}_-_${sanitizeFilename(id)}_-_{sanitizeFilename(q)}`
+    let name = `${sanitizeFilename(songInfo.name || 'Unknown')}_-_${sanitizeFilename(songInfo.singer || 'Unknown')}_-_${sanitizeFilename(songInfo.source || 'unknown')}_-_${sanitizeFilename(id)}_-_${sanitizeFilename(q)}`
     if (name.length > 200) name = name.substring(0, 200)
 
     return name
@@ -483,11 +484,32 @@ export const downloadAndCache = async (songInfo: any, url: string, quality?: str
 
             res.pipe(fileStream)
 
-            fileStream.on('close', () => {
+            fileStream.on('close', async () => {
                 if (settled) return
                 cacheProgress.set(songKey, { progress: 100, status: 'tagging' })
 
-                const ext = headerExt || '.mp3'
+                let ext = headerExt || '.mp3'
+
+                // [Enhanced] Detect extension from buffer using file-type
+                if (fs.existsSync(tempPath)) {
+                    try {
+                        const buffer = Buffer.alloc(8192)
+                        const fd = fs.openSync(tempPath, 'r')
+                        const bytesRead = fs.readSync(fd, buffer, 0, 8192, 0)
+                        fs.closeSync(fd)
+
+                        if (bytesRead > 0) {
+                            const type = await fileTypeFromBuffer(buffer.subarray(0, bytesRead))
+                            if (type && type.ext) {
+                                console.log(`[FileCache] Detected type: ${type.ext} (${type.mime}) for ${baseName}`)
+                                ext = `.${type.ext}`
+                            }
+                        }
+                    } catch (e) {
+                        console.warn(`[FileCache] Failed to detect file type for ${baseName}:`, e)
+                    }
+                }
+
                 const finalPath = path.join(dir, baseName + ext)
 
                 if (!fs.existsSync(tempPath)) {
