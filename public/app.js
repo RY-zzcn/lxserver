@@ -22,6 +22,7 @@ class App {
         this.password = null;
         this.currentView = 'dashboard';
         this.users = [];
+        this.configLoaded = false;
         this.systemCpuHistory = [];
         this.processCpuHistory = [];
         this.systemMemHistory = [];
@@ -37,6 +38,7 @@ class App {
         if (savedPassword) {
             this.password = savedPassword;
             this.showApp();
+            this.loadConfig(); // [新增] 初始化时加载配置，确保 configLoaded 标志位正确且持有环境变量数据
             this.loadDashboard();
         }
 
@@ -70,6 +72,8 @@ class App {
         document.getElementById('add-user-btn')?.addEventListener('click', () => this.showAddUserModal());
         document.getElementById('refresh-users-btn')?.addEventListener('click', async () => {
             try {
+                // 在重载前先保存配置
+                await this.saveConfig(true);
                 await this.request('/api/admin/reload', { method: 'POST' });
                 this.loadUsers();
                 this.loadDashboard();
@@ -105,7 +109,10 @@ class App {
             e.preventDefault();
             this.saveConfig();
         });
-        document.getElementById('reload-config-btn')?.addEventListener('click', () => this.loadConfig());
+        document.getElementById('reload-config-btn')?.addEventListener('click', async () => {
+            await this.saveConfig(true);
+            this.loadConfig();
+        });
 
         // 日志查看
         document.getElementById('refresh-logs-btn')?.addEventListener('click', () => this.loadLogs());
@@ -1605,6 +1612,7 @@ class App {
     async loadConfig() {
         try {
             const config = await this.request('/api/config');
+            this.configLoaded = true;
             const form = document.getElementById('config-form');
 
             form.elements['serverName'].value = config.serverName || '';
@@ -1663,7 +1671,8 @@ class App {
         }
     }
 
-    async saveConfig() {
+    async saveConfig(silent = false) {
+        if (!this.configLoaded) return;
         const form = document.getElementById('config-form');
         const formData = new FormData(form);
 
@@ -1729,13 +1738,16 @@ class App {
             const navPlayerLink = document.getElementById('nav-player-link');
             if (navPlayerLink) navPlayerLink.href = playerPath || '/music';
 
-            if (res.warning) {
-                showInfo('配置保存成功！\n\n⚠️ 警告：' + res.warning);
-            } else {
-                showSuccess('配置保存成功！');
+            if (!silent) {
+                if (res.warning) {
+                    showInfo('配置保存成功！\n\n⚠️ 警告：' + res.warning);
+                } else {
+                    showSuccess('配置保存成功！');
+                }
             }
         } catch (err) {
-            showError('配置保存失败: ' + err.message);
+            if (!silent) showError('配置保存失败: ' + err.message);
+            throw err;
         }
     }
 

@@ -426,6 +426,9 @@ if (!fs.existsSync(openDir)) {
   fs.mkdirSync(openDir, { recursive: true })
 }
 
+// 启动前最后保存一次合并后的配置，确保环境变量被固化到 config.js 中
+saveConfigToFile()
+
 startServer(global.lx.config.port, global.lx.config.bindIP)
 
 // 监控 config.js 变动以实现热重载 (由于 nodemon 已忽略该文件)

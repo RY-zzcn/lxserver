@@ -5739,8 +5739,8 @@ async function fetchLyric(song, quality = null) {
         applyLyricUpdate();
 
     } catch (e) {
-        console.error('[Lyric] Failed:', e);
-        renderLyric([], '暂无歌词');
+        console.error(`[Lyric] Failed (${source}_${songmid}):`, e);
+        renderLyric([], `暂无歌词 (${source}: ${songmid})`);
     }
 }
 
