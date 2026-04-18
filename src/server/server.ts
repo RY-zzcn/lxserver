@@ -12,7 +12,7 @@ import {
   SYNC_CODE,
   SYNC_CLOSE_CODE,
 } from '@/constants'
-import { getUserSpace, releaseUserSpace, getUserName, getServerId, getUserDirname } from '@/user'
+import { getUserSpace, releaseUserSpace, getUserName, getServerId, getUserDirname, migrateUserData, renameUserSpace, finishRenameUserSpace } from '@/user'
 import { createMsg2call } from 'message2call'
 import { ElFinderConnector, getSystemRoot } from './elfinderConnector'
 import formidable from 'formidable'
@@ -972,26 +972,72 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
         if (req.method === 'PUT') {
           void readBody(req).then(body => {
             try {
-              const { name, password } = JSON.parse(body)
-              if (!name || !password) {
+              const { name, newName, password } = JSON.parse(body)
+              if (!name || (!password && !newName)) {
                 res.writeHead(400)
-                res.end('Missing name or password')
+                res.end('Missing required fields')
                 return
               }
-              const user = global.lx.config.users.find(u => u.name === name)
-              if (!user) {
+              const userIdx = global.lx.config.users.findIndex(u => u.name === name)
+              if (userIdx === -1) {
                 res.writeHead(404)
                 res.end('User not found')
                 return
               }
 
-              // 更新密码
-              user.password = password
-              saveUsers()
+              const user = global.lx.config.users[userIdx]
 
-              res.writeHead(200)
-              res.end(JSON.stringify({ success: true }))
+              const handleFinalUpdate = () => {
+                if (password) user.password = password
+                saveUsers()
+                res.writeHead(200)
+                res.end(JSON.stringify({ success: true }))
+              }
+
+              if (newName && newName !== name) {
+                if (global.lx.config.users.some(u => u.name === newName)) {
+                  res.writeHead(409)
+                  res.end('New username already exists')
+                  return
+                }
+
+                console.log(`[RenameUser] Renaming ${name} to ${newName}...`)
+
+                // 1. 断开该用户的连接
+                if (wss) {
+                  for (const client of wss.clients) {
+                    if (client.userInfo?.name === name) client.close(SYNC_CLOSE_CODE.normal)
+                  }
+                }
+
+                // 2. 释放内存中的用户空间 (清除缓存) 并锁定，防止重命名期间被重新初始化
+                renameUserSpace(name)
+
+                // 3. 稍作延迟等待 Socket 释放和可能的异步操作完成 (Windows 友好)
+                // 增加到 500ms 以确保稳定性
+                setTimeout(() => {
+                  try {
+                    // 4. 迁移物理数据
+                    migrateUserData(name, newName)
+
+                    // 5. 更新内存中的用户信息 (全局配置)
+                    user.name = newName
+
+                    handleFinalUpdate()
+                  } catch (err: any) {
+                    console.error(`[RenameUser] Failed to migrate data: ${err.message}`)
+                    res.writeHead(500)
+                    res.end(err.message || 'Data Migration Failed')
+                  } finally {
+                    // 无论成功失败，都解除锁定
+                    finishRenameUserSpace(name)
+                  }
+                }, 500)
+              } else {
+                handleFinalUpdate()
+              }
             } catch (e) {
+              console.error('[RenameUser] Error:', e)
               res.writeHead(500)
               res.end('Server Error')
             }
@@ -1607,6 +1653,77 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
             res.writeHead(500)
             res.end(err.message)
           }
+        })
+        return
+      }
+
+      // [新增] 用户 Library API — 收藏歌手 & 收藏专辑
+      // GET /api/user/library/artists  — 读取收藏歌手列表
+      if (pathname === '/api/user/library/artists' && req.method === 'GET') {
+        const username = verifyUserAuth(req)
+        if (!username) { res.writeHead(401); res.end('Unauthorized'); return }
+        const userDirname = getUserDirname(username)
+        const libDir = path.join(global.lx.userPath, userDirname, 'library')
+        const filePath = path.join(libDir, 'artists.json')
+        try {
+          if (!fs.existsSync(filePath)) {
+            res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('[]'); return
+          }
+          const data = fs.readFileSync(filePath, 'utf-8')
+          res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(data)
+        } catch (e: any) { res.writeHead(500); res.end(e.message) }
+        return
+      }
+
+      // POST /api/user/library/artists  — 完整覆盖写入收藏歌手列表
+      if (pathname === '/api/user/library/artists' && req.method === 'POST') {
+        const username = verifyUserAuth(req)
+        if (!username) { res.writeHead(401); res.end('Unauthorized'); return }
+        void readBody(req).then(body => {
+          try {
+            const parsed = JSON.parse(body)
+            if (!Array.isArray(parsed)) throw new Error('Expected an array')
+            const userDirname = getUserDirname(username)
+            const libDir = path.join(global.lx.userPath, userDirname, 'library')
+            if (!fs.existsSync(libDir)) fs.mkdirSync(libDir, { recursive: true })
+            fs.writeFileSync(path.join(libDir, 'artists.json'), JSON.stringify(parsed, null, 2), 'utf-8')
+            res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ success: true }))
+          } catch (e: any) { res.writeHead(400); res.end(e.message) }
+        })
+        return
+      }
+
+      // GET /api/user/library/albums  — 读取收藏专辑列表
+      if (pathname === '/api/user/library/albums' && req.method === 'GET') {
+        const username = verifyUserAuth(req)
+        if (!username) { res.writeHead(401); res.end('Unauthorized'); return }
+        const userDirname = getUserDirname(username)
+        const libDir = path.join(global.lx.userPath, userDirname, 'library')
+        const filePath = path.join(libDir, 'albums.json')
+        try {
+          if (!fs.existsSync(filePath)) {
+            res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('[]'); return
+          }
+          const data = fs.readFileSync(filePath, 'utf-8')
+          res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(data)
+        } catch (e: any) { res.writeHead(500); res.end(e.message) }
+        return
+      }
+
+      // POST /api/user/library/albums  — 完整覆盖写入收藏专辑列表
+      if (pathname === '/api/user/library/albums' && req.method === 'POST') {
+        const username = verifyUserAuth(req)
+        if (!username) { res.writeHead(401); res.end('Unauthorized'); return }
+        void readBody(req).then(body => {
+          try {
+            const parsed = JSON.parse(body)
+            if (!Array.isArray(parsed)) throw new Error('Expected an array')
+            const userDirname = getUserDirname(username)
+            const libDir = path.join(global.lx.userPath, userDirname, 'library')
+            if (!fs.existsSync(libDir)) fs.mkdirSync(libDir, { recursive: true })
+            fs.writeFileSync(path.join(libDir, 'albums.json'), JSON.stringify(parsed, null, 2), 'utf-8')
+            res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ success: true }))
+          } catch (e: any) { res.writeHead(400); res.end(e.message) }
         })
         return
       }
@@ -3031,8 +3148,17 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
 
           let result
           if (type === 'song') {
-            const searchData = await musicSdk[source].musicSearch.search(name, page, limit)
-            result = searchData.list || []
+            const MAX_PAGES = 10  // 最多拉取 10 页 = 200 首
+            const PAGE_SIZE = 20
+            let allSongs: any[] = []
+            for (let p = 1; p <= MAX_PAGES; p++) {
+              const searchData = await musicSdk[source].musicSearch.search(name, p, PAGE_SIZE)
+              const pageList: any[] = searchData.list || []
+              allSongs = allSongs.concat(pageList)
+              // 如果本页返回数量小于 PAGE_SIZE，说明已经是最后一页
+              if (pageList.length < PAGE_SIZE) break
+            }
+            result = allSongs
           } else if (type === 'singer') {
             if (!musicSdk[source].extendSearch || !musicSdk[source].extendSearch.searchSinger) {
               throw new Error(`Source ${source} does not support singer search`)
@@ -3123,19 +3249,27 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
         return
       }
 
-      // [新增] 获取歌手歌曲 API
+      // [新增] 获取歌手歌曲 API（循环拉取全部，前端分页）
       if (pathname === '/api/music/artistSongs' && req.method === 'GET') {
         const id = urlObj.searchParams.get('id')
         const source = urlObj.searchParams.get('source') || 'wy'
-        const page = parseInt(urlObj.searchParams.get('page') || '1')
         const order = urlObj.searchParams.get('order') || 'hot'
         if (!id) {
           res.writeHead(400); res.end('Missing id'); return
         }
         try {
-          const data = await musicSdk[source].extendDetail.getArtistSongs(id, page, 100, order)
+          const MAX_PAGES = 5  // 最多拉取 5 页 = 500 首
+          const PAGE_SIZE = 100
+          let allSongs: any[] = []
+          for (let p = 1; p <= MAX_PAGES; p++) {
+            const data = await musicSdk[source].extendDetail.getArtistSongs(id, p, PAGE_SIZE, order)
+            const pageList: any[] = data.list || []
+            allSongs = allSongs.concat(pageList)
+            // 如果本页返回数量小于 PAGE_SIZE，说明已经是最后一页
+            if (pageList.length < PAGE_SIZE) break
+          }
           res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify(data.list || []))
+          res.end(JSON.stringify(allSongs))
         } catch (err: any) {
           res.writeHead(500); res.end(err.message)
         }
@@ -3152,7 +3286,7 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
         try {
           const data = await musicSdk[source].extendDetail.getAlbumSongs(id)
           res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify(data.list || []))
+          res.end(JSON.stringify(data))
         } catch (err: any) {
           res.writeHead(500); res.end(err.message)
         }
@@ -3202,15 +3336,18 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
 
         void readBody(req).then(async body => {
           // 辅助：通过 SSE 推送进度（内置竞态重试，最多等 600ms 让 SSE 连接就绪）
+          let sseFailed = false
           const pushProgress = async (attempt: any, retries = 3): Promise<void> => {
-            if (reqId && musicProgressClients.has(reqId)) {
+            if (!reqId || sseFailed) return
+            if (musicProgressClients.has(reqId)) {
               musicProgressClients.get(reqId)!.write(`data: ${JSON.stringify(attempt)}\n\n`)
               return
             }
             if (retries > 0) {
               await new Promise(r => setTimeout(r, 200))
               await pushProgress(attempt, retries - 1)
-            } else if (reqId) {
+            } else {
+              sseFailed = true
               console.warn(`[SSE] ReqId ${reqId} not found after retries (${musicProgressClients.size} clients registered)`)
             }
           }
@@ -3233,7 +3370,7 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
 
                 const userApiResult = await callUserApiGetMusicUrl(
                   source, songInfo, quality || '128k', verifiedUsername,
-                  (attempt) => pushProgress(attempt)
+                  (attempt) => { void pushProgress(attempt) }
                 )
                 result = userApiResult
                 attempts = userApiResult.attempts || []
@@ -3245,7 +3382,7 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
               }
             } else {
               // isSourceSupported = false: 无任何自定义源支持此平台，立即通知前端
-              await pushProgress({ name: '系统', status: 'fail', message: `未找到支持 ${source} 平台的自定义源，请在设置中添加或启用相关源` })
+              void pushProgress({ name: '系统', status: 'fail', message: `未找到支持 ${source} 平台的自定义源，请在设置中添加或启用相关源` })
             }
 
             // 自定义源失败则直接报错（内置 SDK 无独立解析能力，回退无意义）
@@ -3808,6 +3945,7 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
             'player.path': global.lx.config['player.path'] ?? '/music',
             'subsonic.enable': global.lx.config['subsonic.enable'] ?? true,
             'subsonic.path': global.lx.config['subsonic.path'] ?? '/rest',
+            'singer.sourcePriority': (global.lx.config['singer.sourcePriority'] || ['tx', 'wy']).join(','),
           }
           res.writeHead(200, {
             'Content-Type': 'application/json',
@@ -3900,6 +4038,10 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
               if (newConfig['subsonic.enable'] !== undefined) global.lx.config['subsonic.enable'] = newConfig['subsonic.enable']
               if (newConfig['subsonic.path'] !== undefined) {
                 global.lx.config['subsonic.path'] = newConfig['subsonic.path'].replace(/\/+$/, '') || '/rest'
+              }
+              if (newConfig['singer.sourcePriority'] !== undefined) {
+                const priority = String(newConfig['singer.sourcePriority']).split(',').filter(s => s === 'tx' || s === 'wy') as Array<'tx' | 'wy'>
+                if (priority.length > 0) global.lx.config['singer.sourcePriority'] = priority
               }
 
               // 更新 WebDAVSync 配置

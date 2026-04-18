@@ -6,10 +6,11 @@ LX Music Sync Server provides a modern Web music player at the route `/music`. I
 
 Functions currently supported by the Web player:
 
-- **Search and Sound Sources**: Supports searching across five major music platforms, and supports custom uploading JS scripts or importing URLs to extend sound sources.
+- **Search and Sound Sources**: Supports searching across five major music platforms, custom uploading JS scripts or importing URLs to extend sound sources. Now supports searching for albums, artists, and favoriting them.
 - **Playback Control**: Multi-audio quality selection (128k/320k/FLAC/Hi-Res) and automatic downgrade if audio quality fails. Supports speed adjustment (0.5x-2.0x), fade-in/fade-out, and playback progress memory.
 - **User Interaction**: Supports keyboard shortcuts, PWA, song comments, and multiple playback modes (single loop, list loop, random, etc.).
 - **Synchronization Function**: Supports reading and displaying user favorites and playlists saved on the server, and supports hot search display and batch download operations.
+- **Protocol Support**: Fully compatible with the **Subsonic** protocol, allowing you to use various Subsonic clients (e.g., Yinliu, Feishin, etc.) to connect.
 - **UI Experience**: Audio waveform display at the bottom, built-in 5 types of themes, sleep timer.
 - **Lyric Extension**: Supports displaying translation and romaji, supports Karaoke word-by-word high-light rendering, and supports sharing lyric images.
 

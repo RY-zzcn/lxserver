@@ -27,6 +27,7 @@ export const ENV_PARAMS = [
   'PLAYER_PATH',
   'SUBSONIC_ENABLE',
   'SUBSONIC_PATH',
+  'SINGER_SOURCE_PRIORITY',
   'LX_USER_',
 ] as const
 

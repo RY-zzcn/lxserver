@@ -26,7 +26,7 @@ LX Sync Server 提供了多种 RESTful 风格的 API 接口，用于自动化获
 - **Header Auth**: `x-frontend-auth: <Admin Password>`
 - `GET /api/users`: 获取所有用户列表及密码。
 - `POST /api/users`: 创建新用户 (`{"name": "...", "password": "..."}`)。
-- `PUT /api/users`: 修改用户密码 (`{"name": "...", "password": "..."}`)。
+- `PUT /api/users`: 修改用户信息 (重命名或修改密码) (`{"name": "原用户名", "newName": "新用户名", "password": "新密码"}`)。
 - `DELETE /api/users`: 删除用户 (`{"names": ["..."], "deleteData": true}`)。
 
 ### 1.3 用户：登录获取 Token (`POST /api/user/login`)
@@ -144,3 +144,39 @@ LX Sync Server 提供了多种 RESTful 风格的 API 接口，用于自动化获
 - `POST /api/custom-source/toggle`: 启用或禁用某个源。
 - `POST /api/custom-source/delete`: 删除自定义源。
 - `POST /api/custom-source/reorder`: 对自定义源进行排序。
+
+---
+
+## 7. 全局系统配置 API (管理员权限)
+
+用于管理后台对服务器核心行为的实时调整。要求 `x-frontend-auth` 鉴权。
+
+- `GET /api/config`: 获取服务器当前的所有可配置项（含环境变量覆盖后的最终值）。
+- `POST /api/config`: 增量更新全局配置。
+  - **参数示例**: `{"singer.sourcePriority": ["tx", "wy"], "user.enablePublicRestriction": true}`
+  - **验证**: 某些字段（如 `singer.sourcePriority`）会进行合法性校验。
+
+---
+
+## 8. Web 播放器专属 API
+
+专为 Web 播放器前端逻辑设计的接口，支持基于 Session 的访问。
+
+### 8.1 基础配置与认证
+- `GET /api/music/config`: **公开接口**，获取 Web 播放器的运行状态配置。
+  - **响应**: `{"player.enableAuth": boolean, "user.enablePublicRestriction": boolean}`
+- `POST /api/music/auth`: 校验访问密码，成功后下发 `lx_player_session` HttpOnly Cookie。
+- `POST /api/music/auth/logout`: 彻底注销当前的 Session 会话。
+- `GET /api/music/auth/verify`: 检查当前 Session 是否依然有效。
+
+### 8.2 增强元数据详情
+- `GET /api/music/artistDetail`: 获取歌手精美详情。
+  - **Params**: `source` (tx/wy), `id` (歌手Mid/ID)。
+  - **Return**: 含 `name`, `desc`, `avatar`, `fans` 等。
+- `GET /api/music/artistAlbums`: 分页获取歌手的专辑列表。
+- `GET /api/music/artistSongs`: 分页获取歌手的全部歌曲。
+- `GET /api/music/albumSongs`: 获取指定专辑内的所有音轨详情。
+
+### 8.3 实时进度 (SSE)
+- `GET /api/music/progress?reqId=xxx`: 通过 Server-Sent Events (SSE) 实时订阅外链解析、缓存进度等流式信息。
+

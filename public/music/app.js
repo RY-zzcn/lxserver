@@ -1057,16 +1057,22 @@ async function doSearch(page = 1, append = false) {
     const input = document.getElementById('search-input').value.trim();
     const resultsContainer = document.getElementById('search-results');
 
-    // Local Search Logic (Only supported for songs)
-    if (type === 'song' && (currentSearchScope === 'local_list' || currentSearchScope === 'local_all')) {
+    // Local Search Logic
+    const isLibrarySearch = currentSearchScope === 'lib_artists' || currentSearchScope === 'lib_albums';
+    const isLocalSongSearch = type === 'song' && (currentSearchScope === 'local_list' || currentSearchScope === 'local_all');
+
+    if (isLibrarySearch || isLocalSongSearch) {
         if (!input) {
-            renderResults(viewingPlaylist);
+            if (currentSearchScope === 'lib_artists') renderLibraryArtists(window.libraryData.artists);
+            else if (currentSearchScope === 'lib_albums') renderLibraryAlbums(window.libraryData.albums);
+            else renderResults(viewingPlaylist);
             return;
         }
 
         let targets = [];
-        if (currentSearchScope === 'local_list') {
-            // 从当前正在查看的列表中搜索，而不是播放列表
+        if (currentSearchScope === 'lib_artists') targets = window.libraryData.artists;
+        else if (currentSearchScope === 'lib_albums') targets = window.libraryData.albums;
+        else if (currentSearchScope === 'local_list') {
             const listId = window.currentViewingListId || 'default';
             if (currentListData) {
                 if (listId === 'default') targets = currentListData.defaultList;
@@ -1077,7 +1083,6 @@ async function doSearch(page = 1, append = false) {
                 }
             }
         } else {
-            // Aggregate all local
             if (currentListData) {
                 targets = [
                     ...(currentListData.defaultList || []),
@@ -1090,9 +1095,14 @@ async function doSearch(page = 1, append = false) {
         const lower = input.toLowerCase();
         const filtered = targets.filter(item =>
             (item.name && item.name.toLowerCase().includes(lower)) ||
-            (item.singer && item.singer.toLowerCase().includes(lower))
+            (item.singer && item.singer.toLowerCase().includes(lower)) ||
+            (item.artistName && item.artistName.toLowerCase().includes(lower)) ||
+            (item.id && String(item.id).toLowerCase().includes(lower))
         );
-        renderResults(filtered);
+
+        if (currentSearchScope === 'lib_artists') renderLibraryArtists(filtered);
+        else if (currentSearchScope === 'lib_albums') renderLibraryAlbums(filtered);
+        else renderResults(filtered);
         return;
     }
 
@@ -1139,8 +1149,8 @@ async function doSearch(page = 1, append = false) {
             const results = await Promise.all(promises);
             list = results.flat();
         } else {
-            // Single Source Search
-            const res = await fetch(`${API_BASE}/search?name=${encodeURIComponent(input)}&source=${source}&page=${page}&type=${type}`, { headers });
+            // Single Source Search — 后端已循环拉取全部页，直接渲染全量结果
+            const res = await fetch(`${API_BASE}/search?name=${encodeURIComponent(input)}&source=${source}&type=${type}`, { headers });
 
             if (!res.ok) {
                 throw new Error(`搜索请求失败: ${res.status} ${res.statusText}`);
@@ -1155,12 +1165,10 @@ async function doSearch(page = 1, append = false) {
             }
 
             list = data.map(item => ({ ...item, source }));
-
-            const pageInfoEl = document.getElementById('page-info');
-            if (pageInfoEl && !append) pageInfoEl.innerText = `第 ${page} 页`;
         }
 
-        if (append) {
+        // singer/album 支持 append 追加翻页；song 由后端全量返回，直接渲染
+        if (append && (type === 'singer' || type === 'album')) {
             // [Fix] Ensure each new song has unique ID
             if (list && list.length > 0) {
                 list.forEach((item, idx) => {
@@ -1176,14 +1184,9 @@ async function doSearch(page = 1, append = false) {
                 const combinedList = [...(window.viewingPlaylist || []), ...newItems];
                 currentPage++;
                 if (type === 'singer') renderSingerResults(combinedList);
-                else if (type === 'album') renderAlbumResults(combinedList);
-                else renderResults(combinedList);
+                else renderAlbumResults(combinedList);
             } else {
-                try {
-                    showError('没有更多搜索结果了');
-                } catch (err) {
-                    showInfo('没有更多搜索结果了');
-                }
+                showInfo('没有更多搜索结果了');
             }
         } else {
             if (type === 'singer') renderSingerResults(list);
@@ -1432,56 +1435,85 @@ function renderSingerResults(list) {
     const container = document.getElementById('search-results');
     const header = document.getElementById('search-results-header');
     if (header) header.classList.add('hidden');
+    // 搜索歌手时隐藏底部分页栏
+    const paginationBar = document.getElementById('search-pagination-bar');
+    if (paginationBar) paginationBar.classList.add('hidden');
 
     window.viewingPlaylist = list;
 
-    container.innerHTML = `
-        <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2 md:gap-4 p-3 md:p-6">
-            ${list.map(singer => `
-                <div class="group flex flex-col items-center p-2 md:p-4 rounded-2xl transition-all hover:t-bg-panel hover:shadow-md cursor-pointer border border-transparent hover:border-emerald-500/30"
-                     onclick="enterArtist('${singer.id}', '${singer.source || 'wy'}')">
-                    <div class="w-16 h-16 sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-full overflow-hidden shadow-sm mb-2 md:mb-3">
-                        <img src="${singer.picUrl || '/music/assets/logo.svg'}" 
-                             onerror="this.src='/music/assets/logo.svg'" 
-                             class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500">
-                    </div>
-                    <span class="text-[11px] md:text-sm font-bold t-text-main text-center truncate w-full" title="${singer.name}">${singer.name}</span>
-                    ${singer.alias && singer.alias.length ? `<span class="text-[9px] md:text-[10px] t-text-muted text-center truncate w-full mt-0.5 md:mt-1">${singer.alias[0]}</span>` : ''}
-                    <span class="hidden md:inline-block text-[10px] px-2 py-0.5 mt-2 rounded bg-emerald-500 text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                        ${singer.albumSize || 0} 专辑
-                    </span>
+    container.innerHTML = '<div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2 md:gap-4 p-3 md:p-6"></div>';
+    const grid = container.querySelector('div');
+    list.forEach((singer, idx) => {
+        const div = document.createElement('div');
+        div.className = 'group flex flex-col items-center p-2 md:p-4 rounded-2xl transition-all hover:t-bg-panel hover:shadow-md cursor-pointer border border-transparent hover:border-emerald-500/30';
+        div.dataset.singerId = singer.id;
+        div.dataset.singerSource = singer.source || 'wy';
+        div.onclick = () => enterArtist(singer.id, singer.source || 'wy');
+        const aliasHtml = singer.alias && singer.alias.length
+            ? `<span class="text-[9px] md:text-[10px] t-text-muted text-center truncate w-full mt-0.5 md:mt-1">${singer.alias[0]}</span>`
+            : '';
+        div.innerHTML = `
+            <div class="relative mb-2 md:mb-3">
+                <div class="w-16 h-16 sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-full overflow-hidden shadow-sm">
+                    <img src="${singer.picUrl || '/music/assets/logo.svg'}"
+                         onerror="this.src='/music/assets/logo.svg'"
+                         class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500">
                 </div>
-            `).join('')}
-        </div>
-    `;
+                <button id="singer-fav-${singer.id}" class="absolute -top-1 -right-1 w-6 h-6 md:w-7 md:h-7 rounded-full flex items-center justify-center transition-all shadow-md z-10 ${isArtistFavorited(singer.id, singer.source || 'wy') ? 'bg-rose-500 text-white opacity-100' : 'bg-black/30 text-white opacity-0 group-hover:opacity-100'}"
+                        title="${isArtistFavorited(singer.id, singer.source || 'wy') ? '取消收藏' : '收藏歌手'}"
+                        onclick="event.stopPropagation(); (async () => { const favd = await toggleArtistFavorite('${singer.id}', '${singer.source || 'wy'}', '${singer.name.replace(/'/g, "\\'")}', '${(singer.picUrl || '').replace(/'/g, "\\'")}'); const btn = document.getElementById('singer-fav-${singer.id}'); if(btn){ btn.className = 'absolute -top-1 -right-1 w-6 h-6 md:w-7 md:h-7 rounded-full flex items-center justify-center transition-all shadow-md z-10 ' + (favd ? 'bg-rose-500 text-white opacity-100' : 'bg-black/30 text-white opacity-0 group-hover:opacity-100'); btn.title = favd ? '取消收藏' : '收藏歌手'; } })()">
+                    <i class="fas fa-heart text-[10px]"></i>
+                </button>
+            </div>
+            <span class="text-[11px] md:text-sm font-bold t-text-main text-center truncate w-full" title="${singer.name}">${singer.name}</span>
+            <div class="flex flex-col items-center mt-1">
+                ${aliasHtml}
+                <div class="mt-1">${getSourceTag ? getSourceTag(singer.source || 'wy') : (singer.source || 'wy').toUpperCase()}</div>
+            </div>
+            <span class="hidden md:inline-block text-[10px] px-2 py-0.5 mt-2 rounded bg-emerald-500 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                ${singer.albumSize || 0} 专辑
+            </span>
+        `;
+        grid.appendChild(div);
+    });
 }
 
 function renderAlbumResults(list) {
     const container = document.getElementById('search-results');
     const header = document.getElementById('search-results-header');
     if (header) header.classList.add('hidden');
+    // 搜索专辑时隐藏底部分页栏
+    const paginationBar = document.getElementById('search-pagination-bar');
+    if (paginationBar) paginationBar.classList.add('hidden');
 
     window.viewingPlaylist = list;
 
-    container.innerHTML = `
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 p-6">
-            ${list.map(item => `
-                <div class="group flex flex-col p-3 rounded-2xl transition-all hover:t-bg-panel hover:shadow-lg cursor-pointer border border-transparent hover:border-emerald-500/20"
-                     onclick="enterAlbum('${item.id}', '${item.source || 'wy'}')">
-                    <div class="aspect-square rounded-xl overflow-hidden shadow-md mb-3 relative">
-                        <img src="${item.picUrl || '/music/assets/logo.svg'}" 
-                             onerror="this.src='/music/assets/logo.svg'" 
-                             class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
-                    </div>
-                    <span class="text-sm font-bold t-text-main line-clamp-2 h-10 leading-5 mb-1" title="${item.name}">${item.name}</span>
-                    <div class="flex items-center justify-between mt-1">
-                        <span class="text-[10px] t-text-muted truncate flex-1">${item.artistName || '未知歌手'}</span>
-                        <span class="text-[10px] t-text-muted ml-2">${item.publishTime ? new Date(item.publishTime).toLocaleDateString() : ''}</span>
-                    </div>
-                </div>
-            `).join('')}
-        </div>
-    `;
+    container.innerHTML = '<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 p-6"></div>';
+    const grid = container.querySelector('div');
+    list.forEach((item) => {
+        const div = document.createElement('div');
+        div.className = 'group flex flex-col p-3 rounded-2xl transition-all hover:t-bg-panel hover:shadow-lg cursor-pointer border border-transparent hover:border-emerald-500/20';
+        div.onclick = () => enterAlbum(item.id, item.source || 'wy');
+        const publishDate = item.publishTime ? new Date(item.publishTime).toLocaleDateString() : '';
+        div.innerHTML = `
+            <div class="aspect-square rounded-xl overflow-hidden shadow-md mb-3 relative">
+                <img src="${item.picUrl || '/music/assets/logo.svg'}"
+                     onerror="this.src='/music/assets/logo.svg'"
+                     class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+                <button id="album-fav-${item.id}" class="absolute top-1.5 right-1.5 w-7 h-7 rounded-full flex items-center justify-center transition-all shadow-sm ${isAlbumFavorited(item.id, item.source || 'wy') ? 'bg-rose-500 text-white opacity-100' : 'bg-black/30 text-white opacity-0 group-hover:opacity-100'}"
+                        title="${isAlbumFavorited(item.id, item.source || 'wy') ? '取消收藏' : '收藏专辑'}"
+                        onclick="event.stopPropagation(); (async () => { const favd = await toggleAlbumFavorite('${item.id}', '${item.source || 'wy'}', '${item.name.replace(/'/g, "\\'")}', '${(item.picUrl || '').replace(/'/g, "\\'")}', '${(item.artistName || '').replace(/'/g, "\\'")}'); const btn = document.getElementById('album-fav-${item.id}'); if(btn){ btn.className = 'absolute top-1.5 right-1.5 w-7 h-7 rounded-full flex items-center justify-center transition-all shadow-sm ' + (favd ? 'bg-rose-500 text-white opacity-100' : 'bg-black/30 text-white opacity-0 group-hover:opacity-100'); btn.title = favd ? '取消收藏' : '收藏专辑'; } })()">
+                    <i class="fas fa-heart text-xs"></i>
+                </button>
+            </div>
+            <span class="text-sm font-bold t-text-main line-clamp-2 h-10 leading-5 mb-1" title="${item.name}">${item.name}</span>
+            <div class="flex items-center justify-between mt-1">
+                <span class="text-[10px] t-text-muted truncate flex-1">${item.artistName || '未知歌手'}</span>
+                <span class="text-[10px] t-text-muted ml-2">${publishDate}</span>
+            </div>
+        `;
+        grid.appendChild(div);
+    });
 }
 
 function formatPlayCount(count) {
@@ -1573,6 +1605,23 @@ function renderArtistHeader(info, activeTab, order) {
             <!-- Small Absolute Back Button -->
             <button onclick="goBackToSearch()" class="absolute top-2 left-2 md:top-4 md:left-4 w-8 h-8 md:w-10 md:h-10 flex items-center justify-center rounded-full bg-emerald-500/80 hover:bg-emerald-500 text-white transition-all z-30 shadow-md active:scale-90" title="返回搜索">
                 <i class="fas fa-arrow-left"></i>
+            </button>
+            <!-- Favorite Button (Artist) -->
+            <button id="artist-header-fav-btn"
+                onclick="(async () => { 
+                    const favd = await toggleArtistFavorite('${info.id}', '${info.source}', '${info.name.replace(/'/g, "\\'")}', '${(info.avatar || '').replace(/'/g, "\\'")}'); 
+                    const btn = document.getElementById('artist-header-fav-btn'); 
+                    if(btn){ 
+                        const base = 'absolute top-2 right-12 md:top-4 md:right-16 w-8 h-8 md:w-10 md:h-10 flex items-center justify-center rounded-full transition-all z-30 shadow-sm active:scale-90';
+                        const favedCls = 'bg-rose-500 text-white';
+                        const normalCls = 'bg-black/10 hover:bg-black/20 dark:bg-white/10 dark:hover:bg-white/20 t-text-main';
+                        btn.className = base + ' ' + (favd ? favedCls : normalCls);
+                        btn.title = favd ? '取消收藏' : '收藏歌手';
+                    } 
+                })()"
+                class="absolute top-2 right-12 md:top-4 md:right-16 w-8 h-8 md:w-10 md:h-10 flex items-center justify-center rounded-full ${isArtistFavorited(info.id, info.source) ? 'bg-rose-500 text-white' : 'bg-black/10 hover:bg-black/20 dark:bg-white/10 dark:hover:bg-white/20 t-text-main'} transition-all z-30 shadow-sm active:scale-90"
+                title="${isArtistFavorited(info.id, info.source) ? '取消收藏' : '收藏歌手'}">
+                <i class="fas fa-heart"></i>
             </button>
 
             <!-- Fold Toggle Button -->
@@ -1748,15 +1797,16 @@ async function loadArtistSongs(id, source, order, forceFetch = false) {
         window.currentArtistId = id;
         window.currentArtistSource = source;
         window.currentArtistOrder = order;
+        window.artistSongsPage = 1; // 重置到第1页
 
-        renderArtistSongsUI(list);
+        renderArtistSongsUI(list, 1);
     } catch (e) {
         showError(`加载歌曲失败: ${e.message}`);
         goBackToSearch();
     }
 }
 
-function renderArtistSongsUI(list) {
+function renderArtistSongsUI(list, page) {
     const content = document.getElementById('artist-detail-content');
     if (!content) return;
 
@@ -1767,8 +1817,24 @@ function renderArtistSongsUI(list) {
         return;
     }
 
+    // 前端分页逻辑
+    const totalItems = list.length;
+    let itemsPerPage = (settings && settings.itemsPerPage === 'all') ? totalItems : parseInt((settings && settings.itemsPerPage) || 20);
+    if (!itemsPerPage || itemsPerPage <= 0) itemsPerPage = 20;
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+    // 使用传入的 page 或者全局 artistSongsPage，默认第1页
+    if (page !== undefined) window.artistSongsPage = page;
+    if (!window.artistSongsPage || window.artistSongsPage < 1) window.artistSongsPage = 1;
+    if (window.artistSongsPage > totalPages) window.artistSongsPage = totalPages;
+
+    const currentPage = window.artistSongsPage;
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
+
     // Apply filtering logic from ListSearch
-    const indexedDisplayList = window.ListSearch ? window.ListSearch.getDisplayList(list) : list.map((item, index) => ({ item, originalIndex: index }));
+    const fullIndexedList = window.ListSearch ? window.ListSearch.getDisplayList(list) : list.map((item, index) => ({ item, originalIndex: index }));
+    const indexedDisplayList = fullIndexedList.slice(startIndex, endIndex);
 
     let html = `
         <!-- 表头 -->
@@ -1866,6 +1932,19 @@ function renderArtistSongsUI(list) {
             `;
     }).join('')}
         </div>
+
+        <!-- 歌手详情内部分页控件 -->
+        <div class="h-12 border-t t-border-main flex items-center justify-between px-6 t-bg-main mt-2 flex-shrink-0">
+            <button onclick="artistSongsPrevPage()"
+                class="text-gray-500 hover:text-emerald-600 disabled:opacity-30 transition-colors ${currentPage <= 1 ? 'opacity-30 pointer-events-none' : ''}">
+                <i class="fas fa-chevron-left"></i> 上一页
+            </button>
+            <span class="text-xs t-text-muted font-mono">显示 ${startIndex + 1}-${endIndex} 首，共 ${totalItems} 首</span>
+            <button onclick="artistSongsNextPage()"
+                class="text-gray-500 hover:text-emerald-600 disabled:opacity-30 transition-colors ${currentPage >= totalPages ? 'opacity-30 pointer-events-none' : ''}">
+                下一页 <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
     `;
     content.innerHTML = html;
 
@@ -1873,6 +1952,28 @@ function renderArtistSongsUI(list) {
     if (window.applyMarqueeChecks) applyMarqueeChecks();
 }
 window.renderArtistSongsUI = renderArtistSongsUI;
+
+// 歌手详情页内部翻页函数
+function artistSongsPrevPage() {
+    const list = window.currentArtistSongsCache;
+    if (!list) return;
+    if (!window.artistSongsPage || window.artistSongsPage <= 1) return;
+    renderArtistSongsUI(list, window.artistSongsPage - 1);
+}
+function artistSongsNextPage() {
+    const list = window.currentArtistSongsCache;
+    if (!list) return;
+    const totalItems = list.length;
+    let itemsPerPage = (settings && settings.itemsPerPage === 'all') ? totalItems : parseInt((settings && settings.itemsPerPage) || 20);
+    if (!itemsPerPage || itemsPerPage <= 0) itemsPerPage = 20;
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    if ((window.artistSongsPage || 1) >= totalPages) return;
+    renderArtistSongsUI(list, (window.artistSongsPage || 1) + 1);
+}
+window.artistSongsPrevPage = artistSongsPrevPage;
+window.artistSongsNextPage = artistSongsNextPage;
+
+
 
 async function loadArtistAlbums(id, source, forceFetch = false) {
     if (!forceFetch && window.currentArtistAlbumsCache && window.currentArtistId === id && window.currentArtistSource === source) {
@@ -1961,10 +2062,16 @@ async function enterAlbum(id, source = 'wy') {
     try {
         const res = await fetch(`${API_BASE}/albumSongs?id=${id}&source=${source}`);
         if (!res.ok) throw new Error('Failed to fetch album songs');
-        const list = await res.json();
-        renderResults(list);
+        const data = await res.json();
+        const songList = data.list || (Array.isArray(data) ? data : []);
+        renderResults(songList);
         const pageInfoEl = document.getElementById('page-info');
         if (pageInfoEl) pageInfoEl.innerText = `专辑歌曲列表`;
+
+        // [新增] 如果该专辑已收藏，则异步丰富其元数据
+        if (isAlbumFavorited(id, source)) {
+            updateAlbumLibraryMeta(id, source, data);
+        }
 
         const backBtn = document.getElementById('search-back-btn');
         if (backBtn) backBtn.classList.remove('hidden');
@@ -2002,7 +2109,11 @@ function goBackToSearch(fromPopState = false) {
     // 恢复搜索结果列表头部
     if (header) header.classList.remove('hidden');
 
-    if (lastSearchType === 'singer') {
+    if (currentSearchScope === 'lib_artists') {
+        renderLibraryArtists(lastSearchResultList);
+    } else if (currentSearchScope === 'lib_albums') {
+        renderLibraryAlbums(lastSearchResultList);
+    } else if (lastSearchType === 'singer') {
         renderSingerResults(lastSearchResultList);
     } else if (lastSearchType === 'album') {
         renderAlbumResults(lastSearchResultList);
@@ -2014,7 +2125,11 @@ function goBackToSearch(fromPopState = false) {
     if (backBtn) backBtn.classList.add('hidden');
 
     const pageInfoEl = document.getElementById('page-info');
-    if (pageInfoEl) pageInfoEl.innerText = `搜索结果`;
+    if (pageInfoEl) {
+        if (currentSearchScope === 'lib_artists') pageInfoEl.innerText = `收藏歌手`;
+        else if (currentSearchScope === 'lib_albums') pageInfoEl.innerText = `收藏专辑`;
+        else pageInfoEl.innerText = `搜索结果`;
+    }
 
     lastSearchResultList = null;
     lastSearchType = null;
@@ -2043,12 +2158,18 @@ function renderResults(list) {
     const container = document.getElementById('search-results');
     const header = document.getElementById('search-results-header');
     if (header) header.classList.remove('hidden');
+    // 搜索歌曲时恢复底部分页栏显示
+    const paginationBar = document.getElementById('search-pagination-bar');
+    if (paginationBar) paginationBar.classList.remove('hidden');
+    // 重置歌手详情分页（进入歌曲搜索视图时清空）
+    window.artistSongsPage = 1;
     const headerTitle = document.getElementById('header-title');
     const headerAlbum = document.getElementById('header-album');
 
     // Determine if we should show the album column
     // Search results (network) show album, collections (local) do not
     const showAlbum = currentSearchScope === 'network';
+
 
     // Update Header
     if (header) {
@@ -2888,6 +3009,7 @@ async function handleAdminLogin() {
     if (authorized) {
         showSuccess('管理员已登录');
         syncSettingsUI(); // 刷新设置界面状态
+        if (typeof renderCustomSources === 'function') renderCustomSources(); // 登录成功后即时刷新自定义源列表（解除隐藏）
     }
 }
 window.handleAdminLogin = handleAdminLogin;
@@ -6370,6 +6492,593 @@ function toggleFavorites() {
 const favArrow = document.getElementById('favorites-arrow');
 if (favArrow) favArrow.style.transform = 'rotate(-90deg)';
 
+// ========== Library 收藏歌手/专辑 ==========
+
+/** 全局 library 数据 */
+window.libraryData = { artists: [], albums: [] };
+
+/** 批量选中的 library 条目（id 集合） */
+window.libraryBatchSelected = new Set();
+window.libraryBatchMode = false; // 'artist' | 'album' | false
+
+/** 从后端加载两个 library 文件 */
+async function loadLibraryData() {
+    try {
+        const headers = getUserAuthHeaders();
+        const [ar, al] = await Promise.all([
+            fetch('/api/user/library/artists', { headers }).then(r => r.ok ? r.json() : []),
+            fetch('/api/user/library/albums', { headers }).then(r => r.ok ? r.json() : [])
+        ]);
+        window.libraryData.artists = Array.isArray(ar) ? ar : [];
+        window.libraryData.albums = Array.isArray(al) ? al : [];
+        // 刷新侧边栏数量
+        refreshLibrarySidebarCount();
+    } catch (e) {
+        console.warn('[Library] 加载失败:', e);
+    }
+}
+window.loadLibraryData = loadLibraryData;
+
+/** 刷新侧边栏常驻项的数量徽标 */
+function refreshLibrarySidebarCount() {
+    const artCount = document.getElementById('lib-artist-count');
+    const albCount = document.getElementById('lib-album-count');
+    if (artCount) artCount.textContent = window.libraryData.artists.length;
+    if (albCount) albCount.textContent = window.libraryData.albums.length;
+}
+
+/** 持久化 artists 到后端 */
+async function saveLibraryArtists() {
+    try {
+        await fetch('/api/user/library/artists', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getUserAuthHeaders() },
+            body: JSON.stringify(window.libraryData.artists)
+        });
+        refreshLibrarySidebarCount();
+    } catch (e) { console.error('[Library] 保存歌手失败:', e); }
+}
+
+/** 持久化 albums 到后端 */
+async function saveLibraryAlbums() {
+    try {
+        await fetch('/api/user/library/albums', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getUserAuthHeaders() },
+            body: JSON.stringify(window.libraryData.albums)
+        });
+        refreshLibrarySidebarCount();
+    } catch (e) { console.error('[Library] 保存专辑失败:', e); }
+}
+
+/** 切换歌手收藏；返回最新收藏状态 true/false */
+async function toggleArtistFavorite(id, source, name, picUrl) {
+    if (!getUserAuthHeaders()['x-user-token'] && !getUserAuthHeaders()['x-user-name']) {
+        showError('请先登录后再收藏'); return false;
+    }
+    const list = window.libraryData.artists;
+    const idx = list.findIndex(a => String(a.id) === String(id) && a.source === source);
+    if (idx >= 0) {
+        list.splice(idx, 1);
+        await saveLibraryArtists();
+        showInfo(`已取消收藏歌手「${name}」`);
+        return false;
+    } else {
+        list.push({ id, source, name, picUrl: picUrl || '' });
+        await saveLibraryArtists();
+        showSuccess(`已收藏歌手「${name}」`);
+        return true;
+    }
+}
+window.toggleArtistFavorite = toggleArtistFavorite;
+
+/** 检查歌手是否已收藏 */
+function isArtistFavorited(id, source) {
+    return window.libraryData.artists.some(a => String(a.id) === String(id) && a.source === source);
+}
+window.isArtistFavorited = isArtistFavorited;
+
+/** 切换专辑收藏；返回最新收藏状态 true/false */
+async function toggleAlbumFavorite(id, source, name, picUrl, artistName) {
+    if (!getUserAuthHeaders()['x-user-token'] && !getUserAuthHeaders()['x-user-name']) {
+        showError('请先登录后再收藏'); return false;
+    }
+    const list = window.libraryData.albums;
+    const idx = list.findIndex(a => String(a.id) === String(id) && a.source === source);
+    if (idx >= 0) {
+        list.splice(idx, 1);
+        await saveLibraryAlbums();
+        showInfo(`已取消收藏专辑「${name}」`);
+        return false;
+    } else {
+        list.push({
+            id,
+            source,
+            name,
+            picUrl: picUrl || '',
+            artistName: artistName || '',
+            interval: '00:00',
+            meta: { albumId: id, picUrl: picUrl || '', albumName: name }
+        });
+        await saveLibraryAlbums();
+        showSuccess(`已收藏专辑「${name}」`);
+        return true;
+    }
+}
+window.toggleAlbumFavorite = toggleAlbumFavorite;
+
+/**
+ * [新增] 当加载专辑详情后，更新收藏库中该专辑的元数据（如音质列表、时长等）
+ */
+async function updateAlbumLibraryMeta(id, source, data) {
+    if (!window.libraryData || !window.libraryData.albums) return;
+    const album = window.libraryData.albums.find(a => String(a.id) === String(id) && a.source === source);
+    if (!album) return;
+
+    const info = data.info || {};
+    const songList = data.list || [];
+
+    // [核心修改] 将完整的歌曲列表保存到 album.list 字段下
+    if (songList.length > 0) {
+        album.list = songList;
+
+        // 补充专辑本身的展示元数据和时长
+        const first = songList[0];
+        album.interval = first.interval || album.interval || '00:00';
+
+        album.meta = album.meta || {};
+        album.meta.albumId = id;
+        album.meta.picUrl = album.picUrl || info.img || info.pic || first.meta?.picUrl;
+        album.meta.albumName = album.name || info.name || first.meta?.albumName;
+
+        // 兼容性字段：取第一首歌的 meta 信息（对应用户示例）
+        if (first.meta) {
+            album.meta.qualitys = first.meta.qualitys;
+            album.meta._qualitys = first.meta._qualitys;
+            album.meta.songId = first.meta.songId;
+        }
+    }
+
+    try {
+        await saveLibraryAlbums();
+        console.log(`[Library] 已成功丰富专辑「${album.name}」的歌曲列表 (${songList.length} 首)`);
+    } catch (e) {
+        console.error('[Library] 自动更新专辑元数据失败:', e);
+    }
+}
+window.updateAlbumLibraryMeta = updateAlbumLibraryMeta;
+
+/**
+ * [新增] 一键同步所有收藏专辑的歌曲列表
+ */
+async function syncAllLibraryAlbums() {
+    if (!window.libraryData || !window.libraryData.albums.length) return;
+    const list = window.libraryData.albums;
+
+    const btn = document.getElementById('sync-all-albums-btn');
+    if (!btn) return;
+
+    const originalContent = btn.innerHTML;
+    btn.disabled = true;
+    btn.classList.add('opacity-50', 'cursor-not-allowed');
+
+    let successCount = 0;
+    try {
+        for (let i = 0; i < list.length; i++) {
+            const album = list[i];
+            btn.innerHTML = `<i class="fas fa-spinner fa-spin mr-1"></i> ${i + 1}/${list.length}`;
+
+            try {
+                const res = await fetch(`${API_BASE}/albumSongs?id=${album.id}&source=${album.source || 'wy'}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    await updateAlbumLibraryMeta(album.id, album.source || 'wy', data);
+                    successCount++;
+                }
+            } catch (err) {
+                console.error(`[Library] 同步专辑「${album.name}」失败:`, err);
+            }
+            // 避免请求过快
+            if (list.length > 3) await new Promise(r => setTimeout(r, 200));
+        }
+        showSuccess(`同步完成！成功更新 ${successCount} 个专辑的数据。`);
+        // 重新渲染当前视图
+        if (currentSearchScope === 'lib_albums') {
+            renderLibraryAlbums(window.libraryData.albums);
+        }
+    } catch (err) {
+        showError('全量同步过程中发生异常');
+    } finally {
+        btn.disabled = false;
+        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        btn.innerHTML = originalContent;
+    }
+}
+window.syncAllLibraryAlbums = syncAllLibraryAlbums;
+
+/** 检查专辑是否已收藏 */
+function isAlbumFavorited(id, source) {
+    return window.libraryData.albums.some(a => String(a.id) === String(id) && a.source === source);
+}
+window.isAlbumFavorited = isAlbumFavorited;
+
+/**
+ * 渲染收藏歌手列表（带批量操作支持）
+ * 直接复用搜索结果容器
+ */
+function renderLibraryArtists(list) {
+    const container = document.getElementById('search-results');
+    const header = document.getElementById('search-results-header');
+    const paginationBar = document.getElementById('search-pagination-bar');
+    if (header) header.classList.add('hidden');
+    if (paginationBar) paginationBar.classList.add('hidden');
+
+    window.libraryBatchMode = false;
+    window.libraryBatchSelected.clear();
+    window.viewingPlaylist = list;
+
+    if (!list || list.length === 0) {
+        container.innerHTML = `
+            <div class="flex flex-col items-center justify-center h-full t-text-muted space-y-4">
+                <i class="fas fa-user-slash text-6xl opacity-20"></i>
+                <p>还没有收藏任何歌手</p>
+                <p class="text-xs">在搜索结果中点击 ♥ 收藏歌手</p>
+            </div>`;
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="p-3 md:p-4 border-b t-border-main t-bg-main flex items-center justify-between">
+            <span class="text-sm font-bold t-text-main">收藏歌手 <span class="text-emerald-500">${list.length}</span> 位</span>
+            <div class="flex items-center gap-2">
+                <button onclick="enterLibraryArtistBatch()" class="text-xs px-3 py-1.5 border t-border-main rounded-lg t-text-muted hover:text-emerald-600 hover:border-emerald-400 transition-all flex items-center gap-1">
+                    <i class="fas fa-tasks"></i> 批量管理
+                </button>
+            </div>
+        </div>
+        <div id="lib-artist-batch-bar" class="hidden bg-emerald-50 border-b border-emerald-200 p-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <span class="text-sm text-emerald-700">已选: <span id="lib-artist-sel-count" class="font-bold">0</span></span>
+                <button onclick="libSelectAllArtists()" class="text-xs px-3 py-1 t-bg-panel border border-emerald-300 rounded hover:bg-emerald-50 text-emerald-700">全选</button>
+                <button onclick="libDeselectAllArtists()" class="text-xs px-3 py-1 t-bg-panel border t-border-main rounded hover:t-bg-track t-text-muted">清空</button>
+                <button onclick="exitLibraryArtistBatch()" class="text-xs px-3 py-1 t-bg-panel border border-red-300 rounded hover:bg-red-50 text-red-600">退出</button>
+            </div>
+            <button onclick="libDeleteSelectedArtists()" class="text-xs px-4 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded transition-colors flex items-center gap-1">
+                <i class="fas fa-trash"></i> 删除所选
+            </button>
+        </div>
+        <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2 md:gap-4 p-3 md:p-6" id="lib-artist-grid"></div>`;
+
+    const grid = container.querySelector('#lib-artist-grid');
+    list.forEach(singer => {
+        const div = document.createElement('div');
+        div.className = 'group relative flex flex-col items-center p-2 md:p-4 rounded-2xl transition-all hover:t-bg-panel hover:shadow-md cursor-pointer border border-transparent hover:border-emerald-500/30';
+        div.dataset.libArtistId = singer.id;
+        div.dataset.libArtistSource = singer.source;
+        div.onclick = (e) => {
+            if (e.target.closest('.lib-batch-check') || e.target.closest('.lib-fav-btn')) return;
+            if (window.libraryBatchMode === 'artist') {
+                toggleLibArtistBatchSelect(singer.id);
+                return;
+            }
+            enterArtist(singer.id, singer.source || 'wy');
+        };
+        div.innerHTML = `
+            <div class="relative mb-2 md:mb-3">
+                <div class="w-16 h-16 sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-full overflow-hidden shadow-sm">
+                    <img src="${singer.picUrl || '/music/assets/logo.svg'}"
+                         onerror="this.src='/music/assets/logo.svg'"
+                         class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500">
+                </div>
+                <div class="lib-batch-check absolute inset-0 bg-black/40 hidden items-center justify-center rounded-full">
+                    <i class="fas fa-check-circle text-white text-2xl"></i>
+                </div>
+                <button class="lib-fav-btn absolute -top-1 -right-1 w-6 h-6 md:w-7 md:h-7 rounded-full bg-red-400/80 hover:bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md z-10"
+                        title="取消收藏"
+                        onclick="event.stopPropagation(); removeLibraryArtist('${singer.id}', '${singer.source}')">
+                    <i class="fas fa-times text-[10px]"></i>
+                </button>
+            </div>
+            <span class="text-[11px] md:text-sm font-bold t-text-main text-center truncate w-full" title="${singer.name}">${singer.name}</span>
+            <div class="mt-1">${getSourceTag ? getSourceTag(singer.source || 'wy') : (singer.source || 'wy').toUpperCase()}</div>`;
+        grid.appendChild(div);
+    });
+}
+window.renderLibraryArtists = renderLibraryArtists;
+
+/** 渲染收藏专辑列表（带批量操作支持） */
+function renderLibraryAlbums(list) {
+    const container = document.getElementById('search-results');
+    const header = document.getElementById('search-results-header');
+    const paginationBar = document.getElementById('search-pagination-bar');
+    if (header) header.classList.add('hidden');
+    if (paginationBar) paginationBar.classList.add('hidden');
+
+    window.libraryBatchMode = false;
+    window.libraryBatchSelected.clear();
+    window.viewingPlaylist = list;
+
+    if (!list || list.length === 0) {
+        container.innerHTML = `
+            <div class="flex flex-col items-center justify-center h-full t-text-muted space-y-4">
+                <i class="fas fa-compact-disc text-6xl opacity-20"></i>
+                <p>还没有收藏任何专辑</p>
+                <p class="text-xs">在搜索结果中点击 ♥ 收藏专辑</p>
+            </div>`;
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="p-3 md:p-4 border-b t-border-main t-bg-main flex items-center justify-between">
+            <span class="text-sm font-bold t-text-main">收藏专辑 <span class="text-emerald-500">${list.length}</span> 张</span>
+            <div class="flex items-center gap-2">
+                <button id="sync-all-albums-btn" onclick="syncAllLibraryAlbums()" class="text-xs px-3 py-1.5 border t-border-main rounded-lg t-text-muted hover:text-blue-500 hover:border-blue-400 transition-all flex items-center gap-1">
+                    <i class="fas fa-sync-alt"></i> 同步所有
+                </button>
+                <button onclick="enterLibraryAlbumBatch()" class="text-xs px-3 py-1.5 border t-border-main rounded-lg t-text-muted hover:text-emerald-600 hover:border-emerald-400 transition-all flex items-center gap-1">
+                    <i class="fas fa-tasks"></i> 批量管理
+                </button>
+            </div>
+        </div>
+        <div id="lib-album-batch-bar" class="hidden bg-emerald-50 border-b border-emerald-200 p-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <span class="text-sm text-emerald-700">已选: <span id="lib-album-sel-count" class="font-bold">0</span></span>
+                <button onclick="libSelectAllAlbums()" class="text-xs px-3 py-1 t-bg-panel border border-emerald-300 rounded hover:bg-emerald-50 text-emerald-700">全选</button>
+                <button onclick="libDeselectAllAlbums()" class="text-xs px-3 py-1 t-bg-panel border t-border-main rounded hover:t-bg-track t-text-muted">清空</button>
+                <button onclick="exitLibraryAlbumBatch()" class="text-xs px-3 py-1 t-bg-panel border border-red-300 rounded hover:bg-red-50 text-red-600">退出</button>
+            </div>
+            <button onclick="libDeleteSelectedAlbums()" class="text-xs px-4 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded transition-colors flex items-center gap-1">
+                <i class="fas fa-trash"></i> 删除所选
+            </button>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 p-6" id="lib-album-grid"></div>`;
+
+    const grid = container.querySelector('#lib-album-grid');
+    list.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'group relative flex flex-col p-3 rounded-2xl transition-all hover:t-bg-panel hover:shadow-lg cursor-pointer border border-transparent hover:border-emerald-500/20';
+        div.dataset.libAlbumId = item.id;
+        div.dataset.libAlbumSource = item.source;
+        div.onclick = (e) => {
+            if (e.target.closest('.lib-batch-check') || e.target.closest('.lib-fav-btn')) return;
+            if (window.libraryBatchMode === 'album') {
+                toggleLibAlbumBatchSelect(item.id);
+                return;
+            }
+            enterAlbum(item.id, item.source || 'wy');
+        };
+        div.innerHTML = `
+            <div class="aspect-square rounded-xl overflow-hidden shadow-md mb-3 relative">
+                <img src="${item.picUrl || '/music/assets/logo.svg'}"
+                     onerror="this.src='/music/assets/logo.svg'"
+                     class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+                <div class="lib-batch-check absolute inset-0 bg-black/40 hidden items-center justify-center rounded-xl">
+                    <i class="fas fa-check-circle text-white text-3xl"></i>
+                </div>
+            </div>
+            <span class="text-sm font-bold t-text-main line-clamp-2 h-10 leading-5 mb-1" title="${item.name}">${item.name}</span>
+            <div class="flex items-center justify-between mt-1">
+                <span class="text-[10px] t-text-muted truncate flex-1">
+                    ${item.artistName || '未知歌手'}
+                    ${item.list && item.list.length ? `<span class="ml-1 text-emerald-500 font-bold">(${item.list.length} 首)</span>` : ''}
+                </span>
+                <span class="text-[10px] t-text-muted ml-2">${getSourceTag ? getSourceTag(item.source) : ''}</span>
+            </div>
+            <button class="lib-fav-btn absolute top-3 right-3 w-7 h-7 rounded-full bg-red-400/80 hover:bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                    title="取消收藏"
+                    onclick="event.stopPropagation(); removeLibraryAlbum('${item.id}', '${item.source}')">
+                <i class="fas fa-times text-xs"></i>
+            </button>`;
+        grid.appendChild(div);
+    });
+}
+window.renderLibraryAlbums = renderLibraryAlbums;
+
+/** 点击侧边栏"收藏歌手"，切换到展示视图 */
+function handleArtistLibraryClick() {
+    exitListSecondaryModes && exitListSecondaryModes();
+    document.querySelectorAll('[id^="view-"]').forEach(el => el.classList.add('hidden'));
+    const activeView = document.getElementById('view-search');
+    activeView.classList.remove('hidden');
+    setTimeout(() => activeView.classList.remove('opacity-0'), 10);
+
+    document.querySelectorAll('[id^="tab-"]').forEach(el => {
+        el.classList.remove('active-tab', 'text-emerald-600');
+        el.classList.add('t-text-muted');
+    });
+    const favTab = document.getElementById('tab-favorites');
+    if (favTab) { favTab.classList.add('active-tab'); favTab.classList.remove('t-text-muted'); }
+
+    document.querySelectorAll('[data-sidebar-list-id]').forEach(el => { el.classList.remove('active-sub-item'); el.classList.add('t-text-muted'); });
+    const subItem = document.querySelector('[data-sidebar-list-id="__lib_artists__"]');
+    if (subItem) { subItem.classList.add('active-sub-item'); subItem.classList.remove('t-text-muted'); }
+
+    document.getElementById('page-title').innerText = '收藏歌手';
+    document.getElementById('search-input').value = '';
+    document.getElementById('search-input').placeholder = '搜索收藏歌手...';
+    document.getElementById('search-source').classList.add('hidden');
+    document.getElementById('search-type').classList.add('hidden');
+
+    currentSearchScope = 'lib_artists';
+    window.currentViewingListId = '__lib_artists__';
+    renderLibraryArtists(window.libraryData.artists);
+}
+window.handleArtistLibraryClick = handleArtistLibraryClick;
+
+/** 点击侧边栏"收藏专辑"，切换到展示视图 */
+function handleAlbumLibraryClick() {
+    exitListSecondaryModes && exitListSecondaryModes();
+    document.querySelectorAll('[id^="view-"]').forEach(el => el.classList.add('hidden'));
+    const activeView = document.getElementById('view-search');
+    activeView.classList.remove('hidden');
+    setTimeout(() => activeView.classList.remove('opacity-0'), 10);
+
+    document.querySelectorAll('[id^="tab-"]').forEach(el => {
+        el.classList.remove('active-tab', 'text-emerald-600');
+        el.classList.add('t-text-muted');
+    });
+    const favTab = document.getElementById('tab-favorites');
+    if (favTab) { favTab.classList.add('active-tab'); favTab.classList.remove('t-text-muted'); }
+
+    document.querySelectorAll('[data-sidebar-list-id]').forEach(el => { el.classList.remove('active-sub-item'); el.classList.add('t-text-muted'); });
+    const subItem = document.querySelector('[data-sidebar-list-id="__lib_albums__"]');
+    if (subItem) { subItem.classList.add('active-sub-item'); subItem.classList.remove('t-text-muted'); }
+
+    document.getElementById('page-title').innerText = '收藏专辑';
+    document.getElementById('search-input').value = '';
+    document.getElementById('search-input').placeholder = '搜索收藏专辑...';
+    document.getElementById('search-source').classList.add('hidden');
+    document.getElementById('search-type').classList.add('hidden');
+
+    currentSearchScope = 'lib_albums';
+    window.currentViewingListId = '__lib_albums__';
+    renderLibraryAlbums(window.libraryData.albums);
+}
+window.handleAlbumLibraryClick = handleAlbumLibraryClick;
+
+// ---- 批量操作：歌手 ----
+
+function enterLibraryArtistBatch() {
+    window.libraryBatchMode = 'artist';
+    window.libraryBatchSelected.clear();
+    const bar = document.getElementById('lib-artist-batch-bar');
+    if (bar) bar.classList.remove('hidden');
+    updateLibArtistBatchCount();
+}
+function exitLibraryArtistBatch() {
+    window.libraryBatchMode = false;
+    window.libraryBatchSelected.clear();
+    const bar = document.getElementById('lib-artist-batch-bar');
+    if (bar) bar.classList.add('hidden');
+    // 取消所有选中视觉效果
+    document.querySelectorAll('#lib-artist-grid .lib-batch-check').forEach(el => el.classList.remove('flex'));
+    document.querySelectorAll('#lib-artist-grid .lib-batch-check').forEach(el => el.classList.add('hidden'));
+}
+function toggleLibArtistBatchSelect(id) {
+    if (window.libraryBatchSelected.has(String(id))) {
+        window.libraryBatchSelected.delete(String(id));
+    } else {
+        window.libraryBatchSelected.add(String(id));
+    }
+    // 更新视觉状态
+    document.querySelectorAll('#lib-artist-grid [data-lib-artist-id]').forEach(card => {
+        const check = card.querySelector('.lib-batch-check');
+        if (!check) return;
+        if (window.libraryBatchSelected.has(card.dataset.libArtistId)) {
+            check.classList.remove('hidden'); check.classList.add('flex');
+        } else {
+            check.classList.add('hidden'); check.classList.remove('flex');
+        }
+    });
+    updateLibArtistBatchCount();
+}
+function libSelectAllArtists() {
+    window.libraryData.artists.forEach(a => window.libraryBatchSelected.add(String(a.id)));
+    document.querySelectorAll('#lib-artist-grid .lib-batch-check').forEach(el => { el.classList.remove('hidden'); el.classList.add('flex'); });
+    updateLibArtistBatchCount();
+}
+function libDeselectAllArtists() {
+    window.libraryBatchSelected.clear();
+    document.querySelectorAll('#lib-artist-grid .lib-batch-check').forEach(el => { el.classList.add('hidden'); el.classList.remove('flex'); });
+    updateLibArtistBatchCount();
+}
+function updateLibArtistBatchCount() {
+    const el = document.getElementById('lib-artist-sel-count');
+    if (el) el.textContent = window.libraryBatchSelected.size;
+}
+async function libDeleteSelectedArtists() {
+    if (window.libraryBatchSelected.size === 0) { showInfo('请先选择要删除的歌手'); return; }
+    const confirmed = await showSelect('删除收藏歌手', `确定删除选中的 ${window.libraryBatchSelected.size} 位歌手吗？`, { danger: true });
+    if (!confirmed) return;
+    window.libraryData.artists = window.libraryData.artists.filter(a => !window.libraryBatchSelected.has(String(a.id)));
+    await saveLibraryArtists();
+    exitLibraryArtistBatch();
+    renderLibraryArtists(window.libraryData.artists);
+    showSuccess('已删除所选歌手');
+}
+async function removeLibraryArtist(id, source) {
+    window.libraryData.artists = window.libraryData.artists.filter(a => !(String(a.id) === String(id) && a.source === source));
+    await saveLibraryArtists();
+    renderLibraryArtists(window.libraryData.artists);
+    showInfo('已取消收藏');
+}
+window.enterLibraryArtistBatch = enterLibraryArtistBatch;
+window.exitLibraryArtistBatch = exitLibraryArtistBatch;
+window.libSelectAllArtists = libSelectAllArtists;
+window.libDeselectAllArtists = libDeselectAllArtists;
+window.libDeleteSelectedArtists = libDeleteSelectedArtists;
+window.removeLibraryArtist = removeLibraryArtist;
+
+// ---- 批量操作：专辑 ----
+
+function enterLibraryAlbumBatch() {
+    window.libraryBatchMode = 'album';
+    window.libraryBatchSelected.clear();
+    const bar = document.getElementById('lib-album-batch-bar');
+    if (bar) bar.classList.remove('hidden');
+    updateLibAlbumBatchCount();
+}
+function exitLibraryAlbumBatch() {
+    window.libraryBatchMode = false;
+    window.libraryBatchSelected.clear();
+    const bar = document.getElementById('lib-album-batch-bar');
+    if (bar) bar.classList.add('hidden');
+    document.querySelectorAll('#lib-album-grid .lib-batch-check').forEach(el => { el.classList.add('hidden'); el.classList.remove('flex'); });
+}
+function toggleLibAlbumBatchSelect(id) {
+    if (window.libraryBatchSelected.has(String(id))) {
+        window.libraryBatchSelected.delete(String(id));
+    } else {
+        window.libraryBatchSelected.add(String(id));
+    }
+    document.querySelectorAll('#lib-album-grid [data-lib-album-id]').forEach(card => {
+        const check = card.querySelector('.lib-batch-check');
+        if (!check) return;
+        if (window.libraryBatchSelected.has(card.dataset.libAlbumId)) {
+            check.classList.remove('hidden'); check.classList.add('flex');
+        } else {
+            check.classList.add('hidden'); check.classList.remove('flex');
+        }
+    });
+    updateLibAlbumBatchCount();
+}
+function libSelectAllAlbums() {
+    window.libraryData.albums.forEach(a => window.libraryBatchSelected.add(String(a.id)));
+    document.querySelectorAll('#lib-album-grid .lib-batch-check').forEach(el => { el.classList.remove('hidden'); el.classList.add('flex'); });
+    updateLibAlbumBatchCount();
+}
+function libDeselectAllAlbums() {
+    window.libraryBatchSelected.clear();
+    document.querySelectorAll('#lib-album-grid .lib-batch-check').forEach(el => { el.classList.add('hidden'); el.classList.remove('flex'); });
+    updateLibAlbumBatchCount();
+}
+function updateLibAlbumBatchCount() {
+    const el = document.getElementById('lib-album-sel-count');
+    if (el) el.textContent = window.libraryBatchSelected.size;
+}
+async function libDeleteSelectedAlbums() {
+    if (window.libraryBatchSelected.size === 0) { showInfo('请先选择要删除的专辑'); return; }
+    const confirmed = await showSelect('删除收藏专辑', `确定删除选中的 ${window.libraryBatchSelected.size} 张专辑吗？`, { danger: true });
+    if (!confirmed) return;
+    window.libraryData.albums = window.libraryData.albums.filter(a => !window.libraryBatchSelected.has(String(a.id)));
+    await saveLibraryAlbums();
+    exitLibraryAlbumBatch();
+    renderLibraryAlbums(window.libraryData.albums);
+    showSuccess('已删除所选专辑');
+}
+async function removeLibraryAlbum(id, source) {
+    window.libraryData.albums = window.libraryData.albums.filter(a => !(String(a.id) === String(id) && a.source === source));
+    await saveLibraryAlbums();
+    renderLibraryAlbums(window.libraryData.albums);
+    showInfo('已取消收藏');
+}
+window.enterLibraryAlbumBatch = enterLibraryAlbumBatch;
+window.exitLibraryAlbumBatch = exitLibraryAlbumBatch;
+window.libSelectAllAlbums = libSelectAllAlbums;
+window.libDeselectAllAlbums = libDeselectAllAlbums;
+window.libDeleteSelectedAlbums = libDeleteSelectedAlbums;
+window.removeLibraryAlbum = removeLibraryAlbum;
+
 
 // Link SyncManager from user_sync.js
 // Link SyncManager from user_sync.js
@@ -6650,6 +7359,9 @@ async function handleLocalLogin() {
             currentListData = listData;
             if (currentListData) currentListData.username = user; // Attach username
             renderMyLists(listData);
+
+            // [Library] 登录后加载收藏歌手/专辑
+            loadLibraryData();
 
             // [Cache] Save list data immediately for offline availability / quick load
             localStorage.setItem('lx_list_data', JSON.stringify(listData));
@@ -7100,6 +7812,24 @@ function renderMyLists(data) {
         `;
         return div;
     };
+
+    // ---- 常驻：收藏歌手 / 收藏专辑 ----
+    const createLibItem = (id, name, icon, countId, clickFn) => {
+        const div = document.createElement('div');
+        div.className = "px-6 py-2 text-sm t-text-muted hover:t-bg-main cursor-pointer flex items-center group transition-colors overflow-hidden";
+        div.setAttribute('data-sidebar-list-id', id);
+        div.onclick = clickFn;
+        div.innerHTML = `
+            <i class="fas ${icon} w-5 t-text-muted group-hover:text-emerald-500 transition-colors flex-shrink-0"></i>
+            <span class="ml-2 flex-1 truncate">${name}</span>
+            <span id="${countId}" class="text-xs text-gray-300 group-hover:t-text-muted mr-2 flex-shrink-0">0</span>
+        `;
+        return div;
+    };
+    container.appendChild(createLibItem('__lib_artists__', '收藏歌手', 'fa-user', 'lib-artist-count', handleArtistLibraryClick));
+    container.appendChild(createLibItem('__lib_albums__', '收藏专辑', 'fa-compact-disc', 'lib-album-count', handleAlbumLibraryClick));
+    // 立即更新数量
+    refreshLibrarySidebarCount();
 
     // Default List
     if (data.defaultList) {
@@ -8072,6 +8802,10 @@ function togglePublicSourcesSetting() {
 async function renderCustomSources() {
     let list = await fetchCustomSources();
 
+    // [新增] 公开受限用户检查逻辑
+    // 判断系统是否开启了“公开用户限制”，且当前访客是否为未登录状态 (userToken 为空)
+    const isPublicRestrictionActive = window.lx_config?.['user.enablePublicRestriction'] && !userToken;
+
     // Filter based on setting
     if (settings.enablePublicSources === false) {
         // Filter out sources where owner is 'open'. 
@@ -8082,12 +8816,33 @@ async function renderCustomSources() {
 
     updateSourceScopeUI();
 
+    // 控制模态框头部的工具栏显示/隐藏
+    const toolbar = document.getElementById('custom-source-toolbar');
+    if (toolbar) {
+        toolbar.classList.toggle('hidden', isPublicRestrictionActive);
+    }
+
     // 渲染目标容器 ID 列表：模态框内 & 设置界面内
     const targetIds = ['custom-sources-list', 'settings-custom-sources-list'];
 
     targetIds.forEach(containerId => {
         const container = document.getElementById(containerId);
         if (!container) return;
+
+        // 如果开启了公开限制，且未登录管理员，则显示锁定提示
+        if (isPublicRestrictionActive) {
+            container.innerHTML = `
+                <div class="flex flex-col items-center justify-center p-8 t-text-muted">
+                    <div class="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center mb-4">
+                        <i class="fas fa-lock text-3xl text-emerald-500/50"></i>
+                    </div>
+                    <p class="text-base font-bold t-text-main mb-2">列表内容已隐藏</p>
+                    <p class="text-xs text-center max-w-[240px] leading-relaxed">当前系统已开启公开访问限制，请登录管理员账号后再管理或查看自定义源列表。</p>
+                    <button onclick="handleAdminLogin()" class="mt-6 px-6 py-2.5 bg-emerald-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-emerald-100 hover:bg-emerald-600 transition-all active:scale-95">前往登录</button>
+                </div>
+            `;
+            return;
+        }
 
         // 空状态
         if (list.length === 0) {

@@ -169,6 +169,11 @@ declare namespace LX {
      * Subsonic 访问路径 (默认 /rest)
      */
     'subsonic.path'?: string
+
+    /**
+     * 歌手信息源优先级
+     */
+    'singer.sourcePriority': Array<'tx' | 'wy'>
   }
 }
 

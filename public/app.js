@@ -17,6 +17,16 @@
 
 const API_BASE = '';
 
+function stringToColor(str) {
+    if (!str) return 'var(--accent-primary)';
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const h = Math.abs(hash) % 360;
+    return `hsl(${h}, 70%, 45%)`;
+}
+
 class App {
     constructor() {
         this.password = null;
@@ -86,12 +96,15 @@ class App {
         document.getElementById('batch-delete-users-btn')?.addEventListener('click', () => this.batchDeleteUsers());
         document.getElementById('select-all-users')?.addEventListener('change', (e) => this.toggleAllUsers(e.target.checked));
 
-        // 新增：密码修改模态框事件
+        // 新增：用户名、密码修改模态框事件
         document.getElementById('save-password-btn')?.addEventListener('click', () => this.saveNewPassword());
+        document.getElementById('save-rename-user-btn')?.addEventListener('click', () => this.saveRenameUser());
+
         // 绑定所有模态框关闭按钮
         document.querySelectorAll('.modal-close').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.getElementById('edit-password-modal')?.classList.add('hidden');
+                document.getElementById('rename-user-modal')?.classList.add('hidden');
                 document.getElementById('modal')?.classList.add('hidden');
             });
         });
@@ -779,10 +792,16 @@ class App {
                     <input type="checkbox" class="user-checkbox" data-index="${index}" onchange="app.updateUserBatchBtn()">
                 </div>
                 <div class="col-name">
-                    <div class="user-avatar">
-                        <span>${user.name.charAt(0).toUpperCase()}</span>
+                    <div class="user-avatar" style="background-color: ${stringToColor(user.name)}">
+                        <span>${this.escapeHtml(user.name.charAt(0).toUpperCase())}</span>
                     </div>
-                    <span>${this.escapeHtml(user.name)}</span>
+                    <span class="user-name-text">${this.escapeHtml(user.name)}</span>
+                    <button class="btn-icon" onclick="app.showRenameUserModal(${index})" title="重命名用户" style="margin-left: 8px;">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                    </button>
                 </div>
                 <div class="col-password">
                     <span class="password-text" id="pwd-text-${index}">******</span>
@@ -985,6 +1004,46 @@ class App {
                 resolve(null);
             });
         });
+    }
+
+    // 显示修改用户名模态框
+    showRenameUserModal(index) {
+        const user = this.users[index];
+        if (!user) return;
+
+        this.editingUser = user.name;
+        document.getElementById('rename-user-input').value = user.name;
+        document.getElementById('rename-user-modal').classList.remove('hidden');
+    }
+
+    // 保存新用户名
+    async saveRenameUser() {
+        const newName = document.getElementById('rename-user-input').value.trim();
+        if (!newName) {
+            showInfo('请填写新用户名');
+            return;
+        }
+        if (newName === this.editingUser) {
+            document.getElementById('rename-user-modal').classList.add('hidden');
+            return;
+        }
+
+        try {
+            await this.request('/api/users', {
+                method: 'PUT',
+                body: JSON.stringify({
+                    name: this.editingUser,
+                    newName: newName
+                })
+            });
+
+            document.getElementById('rename-user-modal').classList.add('hidden');
+            this.loadUsers();
+            this.loadDashboard();
+            showSuccess('用户名修改成功, 请重新在客户端连接');
+        } catch (err) {
+            showError('修改失败: ' + err.message);
+        }
     }
 
     currentUserData = null;
@@ -1644,6 +1703,9 @@ class App {
             if (form.elements['user.cacheSizeLimit']) {
                 form.elements['user.cacheSizeLimit'].value = config['user.cacheSizeLimit'] || 2000;
             }
+            if (form.elements['singer.sourcePriority']) {
+                form.elements['singer.sourcePriority'].value = config['singer.sourcePriority'] || 'tx,wy';
+            }
             form.elements['frontend.password'].value = config['frontend.password'] || '';
 
             // Web播放器配置
@@ -1742,6 +1804,7 @@ class App {
             'player.path': playerPath,
             'subsonic.enable': formData.get('subsonic.enable') === 'on',
             'subsonic.path': (formData.get('subsonic.path') || '').trim() || '/rest',
+            'singer.sourcePriority': formData.get('singer.sourcePriority'),
         };
 
         try {

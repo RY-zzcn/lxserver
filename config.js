@@ -122,5 +122,11 @@ module.exports = {
 
   // Subsonic 访问路径 (默认为 /rest)
   // 环境变量: SUBSONIC_PATH
-  "subsonic.path": "/rest"
-}
+  "subsonic.path": "/rest",
+
+  // 歌手信息源优先级 (多个源用逗号分隔，如 tx,wy)
+  // 环境变量: SINGER_SOURCE_PRIORITY
+  "singer.sourcePriority": [
+    "tx",
+    "wy"
+  ]

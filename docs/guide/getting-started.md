@@ -34,6 +34,7 @@
 ### 方案二：基于 Docker 引擎的容器化部署
 
 本项目支持从 Docker Hub 或 GitHub Packages 拉取镜像：
+
 - **Docker Hub**: `xcq0607/lxserver:latest`
 - **GitHub Packages**: `ghcr.io/xcq0607/lxserver:latest`
 
@@ -45,6 +46,7 @@ docker run -d \
   -v $(pwd)/data:/server/data \
   -v $(pwd)/logs:/server/logs \
   -v $(pwd)/cache:/server/cache \
+  -v $(pwd)/music:/server/music \
   --name lx-sync-server \
   --restart unless-stopped \
   xcq0607/lxserver:latest
@@ -55,6 +57,7 @@ docker run -d \
 - `-v $(pwd)/data:/server/data`：该项配置为**核心必选项**。负责将实例内生成的所有应用层状态数据导出宿主机持久保存。
 - `-v $(pwd)/logs:/server/logs`：用于承接并输出服务应用层所有分级审计日志的物理挂载点。
 - `-v $(pwd)/cache:/server/cache`：用于存放音乐缓存文件，极大提升重复播放时的加载速度。
+- `-v $(pwd)/music:/server/music`：用于存放仅下载歌曲文件。
 
 **声明式 Docker Compose ：**
 针对需标准化长久管理的生产实施，创建名为 `docker-compose.yml` 的定义配置：
@@ -72,6 +75,7 @@ services:
       - ./data:/server/data
       - ./logs:/server/logs
       - ./cache:/server/cache
+      - ./music:/server/music
     environment:
       - NODE_ENV=production
       # - FRONTEND_PASSWORD=123456
@@ -117,12 +121,12 @@ server {
 
     location / {
         proxy_pass http://127.0.0.1:9527;
-    
+  
         # 定义 Header 头传递策略以确保 Node 层可取到客户端外网层 IP
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    
+  
         # 补全长连接升级特性定义（对内部的同步通信套接字服务必要条件）
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";

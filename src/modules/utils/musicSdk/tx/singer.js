@@ -133,6 +133,20 @@ export default {
     })
   },
   /**
+   * 获取歌手完整介绍 (Bio)
+   * @param {string} id 歌手 MID
+   */
+  getDesc(id) {
+    return httpFetch(`https://c.y.qq.com/splcloud/fcgi-bin/fcg_get_singer_desc.fcg?singermid=${id}&format=xml&utf8=1&outCharset=utf-8`, {
+      headers: {
+        'Referer': 'https://y.qq.com/portal/singer_detail.html',
+      },
+    }).promise.then(({ body }) => {
+      const match = body.match(/<desc><!\[CDATA\[([\s\S]*?)\]\]><\/desc>/)
+      return match ? match[1].replace(/\n/g, '\n') : ''
+    }).catch(() => '')
+  },
+  /**
    * 获取歌手专辑列表
    * @param {*} id
    * @param {*} page

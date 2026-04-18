@@ -8,7 +8,7 @@
   <h1>LX Sync Server</h1> -->
   <p>
     <img src="https://img.shields.io/badge/build-passing-brightgreen?style=flat-square" alt="Build Status">
-    <img src="https://img.shields.io/badge/version-v1.8.4-blue?style=flat-square" alt="Version">
+    <img src="https://img.shields.io/badge/version-v1.9.0-blue?style=flat-square" alt="Version">
     <img src="https://img.shields.io/badge/node-%3E%3D16-green?style=flat-square" alt="Node Version">
     <img src="https://img.shields.io/github/license/XCQ0607/lxserver?style=flat-square" alt="License">
     <br>
@@ -99,6 +99,23 @@
   <img src="md/source.png" width="800" alt="Source Management">
 </p>
 
+### 9. 专辑与歌手搜索与收藏
+
+支持搜索专辑与歌手，并支持一键收藏，方便快速找回你喜爱的音乐人与专辑。
+
+<p align="center">
+  <img src="md/album.png" width="400" alt="专辑展示">
+  <img src="md/singer.png" width="400" alt="歌手展示">
+</p>
+
+### 10. Subsonic 协议支持
+
+全面适配 Subsonic 协议，支持使用各类 Subsonic 客户端（如音流、Feishin 等）连接并播放本站资源。
+
+<p align="center">
+  <img src="md/subsonic.png" width="800" alt="Subsonic 支持">
+</p>
+
 ## 🔒 访问控制与安全
 
 为了保护你的隐私，Web 播放器支持开启访问密码。
@@ -146,6 +163,7 @@ docker run -d \
   -v $(pwd)/data:/server/data \
   -v $(pwd)/logs:/server/logs \
   -v $(pwd)/cache:/server/cache \
+  -v $(pwd)/music:/server/music \
   --name lx-sync-server \
   --restart unless-stopped \
   xcq0607/lxserver:latest
@@ -168,6 +186,7 @@ services:
       - ./data:/server/data
       - ./logs:/server/logs
       - ./cache:/server/cache
+      - ./music:/server/music
     environment:
       - NODE_ENV=production
       # - FRONTEND_PASSWORD=123456
@@ -248,6 +267,7 @@ npm start
 | `LIST_ADD_MUSIC_LOCATION_TYPE`   | `list.addMusicLocationType`    | 添加歌曲到列表时的位置 (`top` / `bottom`)                       | `top`            |
 | `PROXY_ALL_ENABLED`               | `proxy.all.enabled`             | 是否启用外发请求代理 (针对 Music SDK)                            | `false`          |
 | `PROXY_ALL_ADDRESS`               | `proxy.all.address`             | 代理地址 (支持 http:// 或 socks5://)                           | -                  |
+| `SINGER_SOURCE_PRIORITY`         | `singer.sourcePriority`         | 歌手信息获取来源优先级 (如 `tx,wy` 或 `wy,tx`)                  | `tx,wy`            |
 | `LX_USER_<用户名>`                 | `users` 数组                   | 快速添加用户，值为该用户的密码 (如 `LX_USER_test=123`)        | -                  |
 
 > **提示**：目前服务支持 `启用根路径` (URL配置为 `ip:port`) 和 `启用用户路径` (URL配置为 `ip:port/username`) 两种数据同步连接方式。如果没有启用用户路径，则必须保证每一个同步用户的鉴权密码不重复。

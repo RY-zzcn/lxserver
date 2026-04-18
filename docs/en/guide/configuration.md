@@ -89,7 +89,13 @@ The underlying periodic polling asynchronous daemon of the service will only be 
 | `SUBSONIC_ENABLE` | `true` | Boolean | **Enable Subsonic protocol**. Allows connections from Subsonic-compatible clients. |
 | `SUBSONIC_PATH` | `'/rest'` | String | **Subsonic access path**. Default is `/rest`. |
 
-### VI. (Advanced Feature) Silent Preset Accounts in CLI Environment
+### VIII. Business Feature Extension Configuration
+
+| Environment Variable Mapping Key (ENV) | System Default Value | Data Type | Scope and Applicable Scenarios |
+| :--- | :--- | :--- | :--- |
+| `SINGER_SOURCE_PRIORITY` | `'tx,wy'` | String | **Singer source priority**. Controls the priority order for fetching singer details, photos, and Mid. Available values are `tx` (Tencent) and `wy` (Netease), separated by commas. |
+
+### IX. (Advanced Feature) Silent Preset Accounts in CLI Environment
 
 With the pre-declaration strategy at the operating system level, users can statically write accounts into the data persistence layer within the server initialization startup sequence without skipping graphical interface configuration:
 

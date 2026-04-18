@@ -18,12 +18,15 @@ export default {
      * @param {string} id 歌手 MID
      */
     getArtistDetail(id) {
-        return singer.getInfo(id).then(data => {
+        return Promise.all([
+            singer.getInfo(id),
+            singer.getDesc(id),
+        ]).then(([data, desc]) => {
             return {
                 source: 'tx',
                 id: data.id,
                 name: data.info.name || '未知歌手',
-                desc: data.info.desc || '',
+                desc: desc || data.info.desc || '',
                 avatar: data.info.avatar || `https://y.gtimg.cn/music/photo_new/T001R300x300M000${id}.jpg`,
                 musicSize: data.count.music || 0,
                 albumSize: data.count.album || 0,

@@ -2719,10 +2719,13 @@ input:-webkit-autofill:active {
     gap: 0.5rem;
 }
 
-.btn-download,
-.btn-delete,
-.btn-restore {
+/* 快照管理按钮通用样式 - 明确选择器并覆盖 .col-actions .btn-delete 的固定宽高 */
+.snapshot-actions .btn-download,
+.snapshot-actions .btn-delete,
+.snapshot-actions .btn-restore {
     padding: 0.5rem 1rem;
+    width: auto;
+    height: auto;
     border-radius: 6px;
     border: none;
     font-size: 0.875rem;
@@ -2731,7 +2734,6 @@ input:-webkit-autofill:active {
     align-items: center;
     gap: 0.5rem;
     transition: all 0.3s ease;
-
 }
 
 .btn-download {

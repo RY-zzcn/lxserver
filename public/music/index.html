@@ -1084,7 +1084,8 @@
                             </div>
                         </div>
                         <!-- Pagination -->
-                        <div class="h-12 border-t t-border-main flex items-center justify-between px-6 t-bg-main">
+                        <div id="search-pagination-bar"
+                            class="h-12 border-t t-border-main flex items-center justify-between px-6 t-bg-main">
                             <button onclick="prevPage()"
                                 class="text-gray-500 hover:text-emerald-600 disabled:opacity-30 transition-colors">
                                 <i class="fas fa-chevron-left"></i> 上一页
@@ -3718,7 +3719,7 @@
             </div>
 
             <!-- Toolbar -->
-            <div class="p-4 border-b t-border-main flex gap-3 t-bg-panel">
+            <div id="custom-source-toolbar" class="p-4 border-b t-border-main flex gap-3 t-bg-panel">
                 <input type="file" id="script-file" accept=".js" class="hidden" onchange="handleFileUpload(this)">
                 <button onclick="document.getElementById('script-file').click()"
                     class="flex-1 flex items-center justify-center px-4 py-2.5 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-colors font-medium">

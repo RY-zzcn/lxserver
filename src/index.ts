@@ -225,6 +225,10 @@ if (envParams.SUBSONIC_ENABLE !== undefined) {
 if (envParams.SUBSONIC_PATH !== undefined) {
   global.lx.config['subsonic.path'] = envParams.SUBSONIC_PATH
 }
+if (envParams.SINGER_SOURCE_PRIORITY !== undefined) {
+  const priority = envParams.SINGER_SOURCE_PRIORITY.split(',').filter(s => s === 'tx' || s === 'wy') as Array<'tx' | 'wy'>
+  if (priority.length > 0) global.lx.config['singer.sourcePriority'] = priority
+}
 
 if (envUsers.length) {
   const users: LX.Config['users'] = []
