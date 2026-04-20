@@ -8116,6 +8116,7 @@ function formatSongToLxMusicStandard(item) {
     // 2. 构造干净的 meta 对象（只保留标准字段）
     let meta = {
         songId: String(songmid),
+        songmid: String(songmid),
         albumName: albumName,
         picUrl: picUrl,
         qualitys: s.qualitys || s.types || (s.meta && (s.meta.qualitys || s.meta.types)) || [],
