@@ -6,12 +6,20 @@ const { execSync, spawnSync } = require('child_process');
 const unzipper = require('unzipper');
 
 /**
- * 自动下载当前平台对应的 Chromaprint fpcalc 二进制文件
+ * 自动下载 Chromaprint fpcalc 二进制文件
  * 目标目录: /public/music/bin/
  */
 
 const TARGET_DIR = path.join(__dirname, '../public/music/bin');
 const GITHUB_RELEASES_URL = 'https://github.com/acoustid/chromaprint/releases/latest';
+
+const PLATFORMS = [
+    { id: 'win-x64', platform: 'win32', arch: 'x64', fileNamePart: 'windows-x86_64.zip', target: 'fpcalc-win-x64.exe' },
+    { id: 'linux-x64', platform: 'linux', arch: 'x64', fileNamePart: 'linux-x86_64.tar.gz', target: 'fpcalc-linux-x64' },
+    { id: 'linux-arm64', platform: 'linux', arch: 'arm64', fileNamePart: 'linux-arm64.tar.gz', target: 'fpcalc-linux-arm64' },
+    { id: 'linux-arm', platform: 'linux', arch: 'arm', fileNamePart: 'linux-armhf.tar.gz', target: 'fpcalc-linux-arm' },
+    { id: 'macos', platform: 'darwin', arch: 'any', fileNamePart: 'macos-universal.tar.gz', target: 'fpcalc-macos' },
+];
 
 // 获取最新版本号
 function getLatestVersion() {
@@ -30,25 +38,6 @@ function getLatestVersion() {
             }
         }).on('error', reject);
     });
-}
-
-// 根据平台获取对应的下载文件名
-function getDownloadFileName(version) {
-    const platform = os.platform(); // win32, linux, darwin
-    const arch = os.arch();         // x64, arm64
-    const v = version.replace('v', '');
-
-    if (platform === 'win32' && arch === 'x64') {
-        return `chromaprint-fpcalc-${v}-windows-x86_64.zip`;
-    }
-    if (platform === 'linux') {
-        if (arch === 'x64') return `chromaprint-fpcalc-${v}-linux-x86_64.tar.gz`;
-        if (arch === 'arm64') return `chromaprint-fpcalc-${v}-linux-arm64.tar.gz`;
-    }
-    if (platform === 'darwin') {
-        return `chromaprint-fpcalc-${v}-macos-universal.tar.gz`;
-    }
-    return null;
 }
 
 // 下载文件
@@ -95,20 +84,62 @@ function findFile(dir, fileName) {
         if (stat.isDirectory()) {
             const found = findFile(fullPath, fileName);
             if (found) return found;
-        } else if (file === fileName) {
+        } else if (file === fileName || (file === 'fpcalc.exe' && fileName === 'fpcalc')) {
             return fullPath;
         }
     }
     return null;
 }
 
+async function downloadPlatform(platformInfo, version, customTargetName) {
+    const v = version.replace('v', '');
+    const fileName = `chromaprint-fpcalc-${v}-${platformInfo.fileNamePart}`;
+    const downloadUrl = `https://github.com/acoustid/chromaprint/releases/download/${version}/${fileName}`;
+    const tempFilePath = path.join(TARGET_DIR, `temp-${platformInfo.id}-${fileName}`);
+
+    console.log(`正在下载 [${platformInfo.id}]: ${fileName}...`);
+    await downloadFile(downloadUrl, tempFilePath);
+
+    const tempDir = path.join(TARGET_DIR, `extract-${platformInfo.id}`);
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
+
+    if (fileName.endsWith('.zip')) {
+        await extractZip(tempFilePath, tempDir);
+    } else {
+        execSync(`tar -xzf "${tempFilePath}" -C "${tempDir}"`);
+    }
+
+    const binaryBaseName = platformInfo.platform === 'win32' ? 'fpcalc.exe' : 'fpcalc';
+    const fpcalcPath = findFile(tempDir, binaryBaseName);
+
+    if (fpcalcPath) {
+        const targetName = customTargetName || platformInfo.target;
+        const finalPath = path.join(TARGET_DIR, targetName);
+        fs.renameSync(fpcalcPath, finalPath);
+        if (platformInfo.platform !== 'win32') {
+            fs.chmodSync(finalPath, '755');
+        }
+        console.log(`成功安装: ${targetName}`);
+    } else {
+        throw new Error(`在解压后的文件中未找到 ${binaryBaseName}`);
+    }
+
+    // 清理
+    fs.unlinkSync(tempFilePath);
+    fs.rmSync(tempDir, { recursive: true, force: true });
+}
+
 async function main() {
+    const isAll = process.argv.includes('--all');
+
     try {
-        // 环境检查
-        const checkGlobal = spawnSync(os.platform() === 'win32' ? 'where' : 'which', ['fpcalc'], { encoding: 'utf8' });
-        if (checkGlobal.status === 0) {
-            console.log('检测到系统中已安装 fpcalc，跳过自动下载。');
-            return;
+        if (!isAll) {
+            // 环境检查：如果不是下载所有，则检查当前平台
+            const checkGlobal = spawnSync(os.platform() === 'win32' ? 'where' : 'which', ['fpcalc'], { encoding: 'utf8' });
+            if (checkGlobal.status === 0) {
+                console.log('检测到系统中已安装 fpcalc，跳过自动下载。');
+                return;
+            }
         }
 
         if (!fs.existsSync(TARGET_DIR)) {
@@ -119,51 +150,32 @@ async function main() {
         const version = await getLatestVersion();
         console.log(`最新版本: ${version}`);
 
-        const fileName = getDownloadFileName(version);
-        if (!fileName) return;
-
-        const downloadUrl = `https://github.com/acoustid/chromaprint/releases/download/${version}/${fileName}`;
-        const tempFilePath = path.join(TARGET_DIR, fileName);
-
-        console.log(`开始下载: ${fileName}...`);
-        await downloadFile(downloadUrl, tempFilePath);
-        console.log('下载完成。');
-
-        console.log('开始解压并安装...');
-        const binaryName = os.platform() === 'win32' ? 'fpcalc.exe' : 'fpcalc';
-
-        if (fileName.endsWith('.zip')) {
-            await extractZip(tempFilePath, TARGET_DIR);
+        if (isAll) {
+            console.log('模式: 下载所有平台二进制文件');
+            for (const p of PLATFORMS) {
+                try {
+                    await downloadPlatform(p, version); // 使用默认的平台特定名称
+                } catch (err) {
+                    console.error(`下载 ${p.id} 失败: ${err.message}`);
+                }
+            }
         } else {
-            execSync(`tar -xzf "${tempFilePath}" -C "${TARGET_DIR}"`);
-        }
-
-        // 自动查找解压后的二进制文件并移动到 TARGET_DIR 根目录
-        const fpcalcPath = findFile(TARGET_DIR, binaryName);
-        if (fpcalcPath && fpcalcPath !== path.join(TARGET_DIR, binaryName)) {
-            fs.renameSync(fpcalcPath, path.join(TARGET_DIR, binaryName));
-            console.log(`已将二进制文件移动至: ${path.join(TARGET_DIR, binaryName)}`);
-        }
-
-        // 清理解压出的多余文件夹（只保留 fpcalc）
-        const items = fs.readdirSync(TARGET_DIR);
-        for (const item of items) {
-            const fullPath = path.join(TARGET_DIR, item);
-            if (fs.statSync(fullPath).isDirectory()) {
-                fs.rmSync(fullPath, { recursive: true, force: true });
-            } else if (item === fileName) {
-                fs.unlinkSync(fullPath);
+            const platform = os.platform();
+            const arch = os.arch();
+            const p = PLATFORMS.find(item => item.platform === platform && (item.arch === 'any' || item.arch === arch));
+            if (p) {
+                // 单平台下载：使用通用名称 (fpcalc.exe / fpcalc)
+                const genericName = platform === 'win32' ? 'fpcalc.exe' : 'fpcalc';
+                await downloadPlatform(p, version, genericName);
+            } else {
+                console.log(`未找到匹配当前平台 (${platform}-${arch}) 的预编译文件。`);
             }
         }
 
-        if (os.platform() !== 'win32') {
-            fs.chmodSync(path.join(TARGET_DIR, binaryName), '755');
-        }
-
-        console.log('安装成功！');
+        console.log('任务完成！');
 
     } catch (error) {
-        console.error('安装失败:', error.message);
+        console.error('任务失败:', error.message);
         process.exit(1);
     }
 }

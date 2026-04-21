@@ -54,7 +54,7 @@ const targetDir = path.resolve(__dirname, '../');
 
 // We exclude config.js/about.md itself to avoid infinite hash changes when injecting the hash.
 // Also ignore logs, data, server (dist), node_modules, .git.
-const publicHash = getDirectoryHash(path.join(targetDir, 'public'), ['js/config.js', 'about.md', 'music/about.md'], []);
+const publicHash = getDirectoryHash(path.join(targetDir, 'public'), ['js/config.js', 'about.md', 'music/about.md', 'music/bin'], []);
 const srcHash = getDirectoryHash(path.join(targetDir, 'src'), [], []);
 
 const finalHash = crypto.createHash('md5').update(publicHash + srcHash).digest('hex').substring(0, 7);

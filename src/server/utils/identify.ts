@@ -24,13 +24,33 @@ function getFpcalcPath(): string | null {
     }
 
     // 2. 检查本地打包目录
-    const platform = os.platform()
-    const binaryName = platform === 'win32' ? 'fpcalc.exe' : 'fpcalc'
+    const platform = os.platform() // win32, linux, darwin
+    const arch = os.arch()         // x64, arm64
 
-    // 在运行时，我们处于 src/server/，需要指向 public/music/bin
-    // 通常 process.cwd() 是项目根目录
-    const localBinPath = path.join(process.cwd(), 'public/music/bin', binaryName)
-    if (fs.existsSync(localBinPath)) return localBinPath
+    // 构造可能的平台特定文件名
+    let platformBinaryName = ''
+    if (platform === 'win32') {
+        platformBinaryName = `fpcalc-win-${arch === 'arm64' ? 'arm64' : 'x64'}.exe`
+    } else if (platform === 'linux') {
+        if (arch === 'arm64') platformBinaryName = 'fpcalc-linux-arm64'
+        else if (arch === 'arm') platformBinaryName = 'fpcalc-linux-arm'
+        else platformBinaryName = 'fpcalc-linux-x64'
+    } else if (platform === 'darwin') {
+        platformBinaryName = 'fpcalc-macos'
+    }
+
+    const binDir = path.join(process.cwd(), 'public/music/bin')
+
+    // 优先匹配带平台的名称
+    if (platformBinaryName) {
+        const platformPath = path.join(binDir, platformBinaryName)
+        if (fs.existsSync(platformPath)) return platformPath
+    }
+
+    // 次优先匹配通用名称 (兼容旧版或手动放置)
+    const genericName = platform === 'win32' ? 'fpcalc.exe' : 'fpcalc'
+    const genericPath = path.join(binDir, genericName)
+    if (fs.existsSync(genericPath)) return genericPath
 
     return null
 }
