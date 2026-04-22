@@ -1,4 +1,4 @@
-import { eapiRequest } from './utils/index'
+import { weapiRequest } from './utils/index'
 import { formatPlayTime, sizeFormate } from '../../index'
 import { formatSingerName } from '../utils'
 
@@ -8,20 +8,21 @@ export default {
    * @param {*} id
    */
   getInfo(id) {
-    return eapiRequest('/api/artist/head/info/get', { id }).then(({ body }) => {
+    return weapiRequest('/artist/head/info/get', { id }).promise.then(({ body }) => {
       if (!body || body.code != 200) throw new Error('get singer info faild.')
+      const data = body.data || {}
       return {
         source: 'wy',
-        id: body.artist.id,
+        id: data.artist.id,
         info: {
-          name: body.artist.name,
-          desc: body.artist.briefDesc,
-          avatar: body.user.avatarUrl,
-          gender: body.user.gender === 1 ? 'man' : 'woman',
+          name: data.artist.name,
+          desc: data.artist.briefDesc,
+          avatar: (data.user && data.user.avatarUrl) || (data.artist && data.artist.picUrl) || '',
+          gender: data.user ? (data.user.gender === 1 ? 'man' : 'woman') : 'man',
         },
         count: {
-          music: body.artist.musicSize,
-          album: body.artist.albumSize,
+          music: data.artist.musicSize,
+          album: data.artist.albumSize,
         },
       }
     })
@@ -34,11 +35,13 @@ export default {
    */
   getSongList(id, page = 1, limit = 100) {
     if (page === 1) page = 0
-    return eapiRequest('/api/v2/artist/songs', {
+    return weapiRequest('/v1/artist/songs', {
       id,
       limit,
       offset: limit * page,
-    }).then(({ body }) => {
+      private_cloud: 'true',
+      work_type: 1,
+    }).promise.then(({ body }) => {
       if (!body.songs || body.code != 200) throw new Error('get singer song list faild.')
 
       const list = this.filterSongList(body.songs)
@@ -59,10 +62,11 @@ export default {
    */
   getAlbumList(id, page = 1, limit = 10) {
     if (page === 1) page = 0
-    return eapiRequest(`/api/artist/albums/${id}`, {
+    return weapiRequest(`/artist/albums/${id}`, {
       limit,
       offset: limit * page,
-    }).then(({ body }) => {
+      total: true,
+    }).promise.then(({ body }) => {
       if (!body.hotAlbums || body.code != 200) throw new Error('get singer album list faild.')
 
       const list = this.filterAlbumList(body.hotAlbums)

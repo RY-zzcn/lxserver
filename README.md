@@ -8,7 +8,7 @@
   <h1>LX Sync Server</h1> -->
   <p>
     <img src="https://img.shields.io/badge/build-passing-brightgreen?style=flat-square" alt="Build Status">
-    <img src="https://img.shields.io/badge/version-v1.8.4-blue?style=flat-square" alt="Version">
+    <img src="https://img.shields.io/badge/version-v1.9.1-blue?style=flat-square" alt="Version">
     <img src="https://img.shields.io/badge/node-%3E%3D16-green?style=flat-square" alt="Node Version">
     <img src="https://img.shields.io/github/license/XCQ0607/lxserver?style=flat-square" alt="License">
     <br>
@@ -99,6 +99,23 @@
   <img src="md/source.png" width="800" alt="Source Management">
 </p>
 
+### 9. 专辑与歌手搜索与收藏
+
+支持搜索专辑与歌手，并支持一键收藏，方便快速找回你喜爱的音乐人与专辑。
+
+<p align="center">
+  <img src="md/album.png" width="400" alt="专辑展示">
+  <img src="md/singer.png" width="400" alt="歌手展示">
+</p>
+
+### 10. Subsonic 协议支持
+
+全面适配 Subsonic 协议，支持使用各类 Subsonic 客户端（如音流、Feishin 等）连接并播放本站资源。
+
+<p align="center">
+  <img src="md/subsonic.png" width="800" alt="Subsonic 支持">
+</p>
+
 ## 🔒 访问控制与安全
 
 为了保护你的隐私，Web 播放器支持开启访问密码。
@@ -110,6 +127,14 @@
    - `WEBPLAYER_PASSWORD=yourpassword`: 设置访问密码
 2. **Web 界面配置**：
    登录管理后台（默认端口 9527），进入 **"系统配置"**，勾选 **"启用 Web 播放器访问密码"** 并设置密码。
+
+### 自定义源权限矩阵 (当 `user.enablePublicRestriction` 开启时)
+
+| 用户类型 | 查看列表 | 使用/切换(仅个人) | 上传/导入公开源 | 删除/修改公开源 |
+| :--- | :--- | :--- | :--- | :--- |
+| **管理员** | ✅ 允许 | ✅ 允许 | ✅ 允许 | ✅ 允许 |
+| **已登录用户** | ✅ 允许 | ✅ 允许 | ❌ 禁止 | ❌ 禁止 |
+| **未登录访客** | ❌ 隐藏 | ❌ 禁止 | ❌ 禁止 | ❌ 禁止 |
 
 ## 📱 移动端适配
 
@@ -146,6 +171,7 @@ docker run -d \
   -v $(pwd)/data:/server/data \
   -v $(pwd)/logs:/server/logs \
   -v $(pwd)/cache:/server/cache \
+  -v $(pwd)/music:/server/music \
   --name lx-sync-server \
   --restart unless-stopped \
   xcq0607/lxserver:latest
@@ -168,6 +194,7 @@ services:
       - ./data:/server/data
       - ./logs:/server/logs
       - ./cache:/server/cache
+      - ./music:/server/music
     environment:
       - NODE_ENV=production
       # - FRONTEND_PASSWORD=123456
@@ -242,9 +269,13 @@ npm start
 | `WEBPLAYER_PASSWORD`             | `player.password`              | Web 播放器访问密码                                              | 123456             |
 | `DISABLE_TELEMETRY`              | `disableTelemetry`             | 是否禁用匿名数据统计，系统更新提示以及系统公告提示              | `false`          |
 | `ENABLE_PUBLIC_USER_RESTRICTION` | `user.enablePublicRestriction` | 是否启用公开用户权限限制 (限制上传、删除公开源、缓存到服务器等) | `true`           |
+| `ENABLE_LOGIN_USER_CACHE_RESTRICTION` | `user.enableLoginCacheRestriction` | 是否启用登录用户缓存限制 (开启后限非管理员登录用户的缓存设置) | `false`          |
+| `ENABLE_CACHE_SIZE_LIMIT`        | `user.enableCacheSizeLimit`      | 是否启用缓存空间限制 (开启后超出容量将按 LRU 自动清理)          | `false`          |
+| `CACHE_SIZE_LIMIT`               | `user.cacheSizeLimit`            | 缓存空间限制大小 (单位: MB)                                     | `2000`           |
 | `LIST_ADD_MUSIC_LOCATION_TYPE`   | `list.addMusicLocationType`    | 添加歌曲到列表时的位置 (`top` / `bottom`)                       | `top`            |
 | `PROXY_ALL_ENABLED`               | `proxy.all.enabled`             | 是否启用外发请求代理 (针对 Music SDK)                            | `false`          |
 | `PROXY_ALL_ADDRESS`               | `proxy.all.address`             | 代理地址 (支持 http:// 或 socks5://)                           | -                  |
+| `SINGER_SOURCE_PRIORITY`         | `singer.sourcePriority`         | 歌手信息获取来源优先级 (如 `tx,wy` 或 `wy,tx`)                  | `tx,wy`            |
 | `LX_USER_<用户名>`                 | `users` 数组                   | 快速添加用户，值为该用户的密码 (如 `LX_USER_test=123`)        | -                  |
 
 > **提示**：目前服务支持 `启用根路径` (URL配置为 `ip:port`) 和 `启用用户路径` (URL配置为 `ip:port/username`) 两种数据同步连接方式。如果没有启用用户路径，则必须保证每一个同步用户的鉴权密码不重复。

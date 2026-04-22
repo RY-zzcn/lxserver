@@ -6,6 +6,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LX Music Web</title>
     <!-- Config MUST be loaded before PostHog -->
+    <script>
+        (function () {
+            var pathname = window.location.pathname;
+            var baseHref = pathname.endsWith('/') ? pathname : pathname + '/';
+            var baseTag = document.createElement('base');
+            baseTag.href = baseHref;
+            document.head.prepend(baseTag);
+            console.log('[PWA] Base href set to:', baseHref);
+        })();
+    </script>
     <script src="/js/config.js"></script>
     <!-- PostHog Analytics -->
     <script>
@@ -14,15 +24,15 @@
             posthog.init('phc_vvaqX7sm3RqmiqRbMCjETTc67XKjgqeMgmYHvsZr30f', { api_host: 'https://us.i.posthog.com' })
         }
     </script>
-    <link rel="icon" href="/music/assets/logo.svg" type="image/svg+xml">
-    <link rel="manifest" href="/music/manifest.json">
-    <link rel="stylesheet" href="/music/css/theme_variables.css">
-    <script src="/music/assets/tailwindcss.js"></script>
-    <script src="/music/js/tailwind_setup.js"></script>
-    <link rel="stylesheet" href="/music/assets/fontawesome/css/all.min.css">
-    <script src="/music/js/crypto-js.min.js"></script>
-    <script src="/music/js/marked.min.js"></script>
-    <script src="/music/js/Sortable.min.js"></script>
+    <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="css/theme_variables.css">
+    <script src="assets/tailwindcss.js"></script>
+    <script src="js/tailwind_setup.js"></script>
+    <link rel="stylesheet" href="assets/fontawesome/css/all.min.css">
+    <script src="js/crypto-js.min.js"></script>
+    <script src="js/marked.min.js"></script>
+    <script src="js/Sortable.min.js"></script>
     <script src="/js/notification-engine.js"></script>
     <style>
         /* Custom scrollbar */
@@ -641,6 +651,74 @@
             animation-delay: 0.4s;
         }
 
+        /* Music Visualizer Loader */
+        @keyframes music-bar-animate {
+
+            0%,
+            100% {
+                transform: scaleY(0.3);
+                opacity: 0.3;
+            }
+
+            50% {
+                transform: scaleY(1.2);
+                opacity: 1;
+            }
+        }
+
+        .music-visualizer-loader {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            height: 60px;
+        }
+
+        .music-visualizer-loader div {
+            width: 5px;
+            height: 40px;
+            background: var(--c-500);
+            border-radius: 3px;
+            box-shadow: 0 0 15px color-mix(in srgb, var(--c-500) 40%, transparent);
+            animation: music-bar-animate 1.2s infinite ease-in-out;
+        }
+
+        .music-visualizer-loader div:nth-child(1) {
+            animation-delay: 0.0s;
+        }
+
+        .music-visualizer-loader div:nth-child(2) {
+            animation-delay: 0.1s;
+        }
+
+        .music-visualizer-loader div:nth-child(3) {
+            animation-delay: 0.2s;
+        }
+
+        .music-visualizer-loader div:nth-child(4) {
+            animation-delay: 0.3s;
+        }
+
+        .music-visualizer-loader div:nth-child(5) {
+            animation-delay: 0.4s;
+        }
+
+        .music-visualizer-loader div:nth-child(6) {
+            animation-delay: 0.3s;
+        }
+
+        .music-visualizer-loader div:nth-child(7) {
+            animation-delay: 0.2s;
+        }
+
+        .music-visualizer-loader div:nth-child(8) {
+            animation-delay: 0.1s;
+        }
+
+        .music-visualizer-loader div:nth-child(9) {
+            animation-delay: 0.0s;
+        }
+
         /* Search Match Highlights - Consistently use theme color-mix */
         .search-match {
             background-color: color-mix(in srgb, var(--c-500) 10%, transparent) !important;
@@ -726,6 +804,70 @@
 </head>
 
 <body class="t-bg-main h-screen flex flex-col overflow-hidden t-text-main font-sans">
+    <!-- Manual Index Search Modal -->
+    <div id="modal-manual-index"
+        class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 hidden px-4">
+        <div class="t-bg-panel w-full max-w-2xl h-[85vh] rounded-[2.5rem] shadow-2xl overflow-hidden border t-border-main flex flex-col"
+            id="modal-manual-index-content">
+            <div class="p-6 border-b t-border-main flex-shrink-0">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-xl font-bold t-text-main tracking-tight">手动关联索引</h3>
+                    <button onclick="LocalMusicManager.closeManualIndexModal()"
+                        class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                        <i class="fas fa-times t-text-muted text-lg"></i>
+                    </button>
+                </div>
+                <!-- Search Box -->
+                <div class="flex gap-2">
+                    <div class="relative flex-1">
+                        <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 t-text-muted text-sm"></i>
+                        <input type="text" id="manual-index-search-input" placeholder="输入歌曲名、歌手、专辑搜索..."
+                            class="w-full pl-11 pr-4 py-3.5 t-bg-track border t-border-main rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 t-text-main t-bg-main"
+                            onkeyup="if(event.key==='Enter') LocalMusicManager.doManualSearch()">
+                    </div>
+                    <select id="manual-index-source-select"
+                        class="px-4 py-3.5 t-bg-track border t-border-main rounded-2xl text-sm t-text-main focus:outline-none t-bg-main">
+                        <option value="tx" selected>腾讯音乐</option>
+                        <option value="wy">网易音乐</option>
+                        <option value="kg">酷狗音乐</option>
+                        <option value="kw">酷我音乐</option>
+                        <option value="mg">咪咕音乐</option>
+                    </select>
+                    <button onclick="LocalMusicManager.identifyTargetSong()" id="btn-manual-identify"
+                        class="w-12 h-12 flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-500/20 transition-all active:scale-[0.98] shrink-0"
+                        title="识别歌曲特征">
+                        <i class="fas fa-fingerprint text-xl"></i>
+                    </button>
+                    <button id="btn-do-manual-search" onclick="LocalMusicManager.doManualSearch()"
+                        class="px-8 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl shadow-lg shadow-emerald-500/20 transition-all active:scale-[0.98]">
+                        搜索
+                    </button>
+                </div>
+                <div id="manual-index-file-info"
+                    class="mt-4 px-2 py-2 t-bg-track rounded-xl text-[11px] t-text-muted flex items-center gap-3">
+                    <i class="fas fa-file-audio text-emerald-500 text-sm"></i>
+                    <span id="manual-index-target-filename" class="font-mono font-bold truncate">filename.mp3</span>
+                    <span id="manual-index-target-duration"
+                        class="ml-auto bg-emerald-500/10 text-emerald-500 px-2 rounded-full">--:--</span>
+                </div>
+            </div>
+
+            <!-- Results area -->
+            <div id="manual-index-results" class="flex-1 overflow-y-auto p-6 space-y-3">
+                <div class="flex flex-col items-center justify-center h-full opacity-30 mt-10">
+                    <i class="fas fa-magnifying-glass text-6xl mb-4"></i>
+                    <p class="text-sm font-bold tracking-wider">搜索在线歌曲以建立关联</p>
+                </div>
+            </div>
+
+            <div class="p-6 border-t t-border-main flex justify-end gap-3 flex-shrink-0">
+                <button onclick="LocalMusicManager.closeManualIndexModal()"
+                    class="px-8 py-3 t-bg-track hover:t-bg-item-hover t-text-main font-bold rounded-2xl transition-all">
+                    取消
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Main Container -->
     <div class="flex flex-1 overflow-hidden relative">
@@ -800,6 +942,13 @@
                                 </button>
                             </li>
                         </ul>
+                    </li>
+                    <li>
+                        <a href="#" onclick="switchTab('localmusic')" id="tab-localmusic"
+                            class="flex items-center px-6 py-3 t-text-muted hover:t-bg-main transition-colors duration-200">
+                            <i class="fas fa-compact-disc w-6 text-center"></i>
+                            <span class="ml-3 font-medium">本地音乐</span>
+                        </a>
                     </li>
                     <li>
                         <a href="#" onclick="switchTab('settings')" id="tab-settings"
@@ -919,6 +1068,13 @@
                                 <i class="fas fa-search"></i>
                             </button>
 
+                            <select id="search-type" onchange="handleSearchTypeChange()"
+                                class="flex-1 md:flex-none px-4 py-3 t-bg-panel border t-border-main rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm t-text-main font-medium text-sm md:text-base">
+                                <option value="song">歌曲</option>
+                                <option value="singer">歌手</option>
+                                <option value="album">专辑</option>
+                            </select>
+
                             <select id="search-source" onchange="doSearch()"
                                 class="flex-1 md:flex-none px-4 py-3 t-bg-panel border t-border-main rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm t-text-main font-medium text-sm md:text-base">
                                 <option value="wy">网易云</option>
@@ -944,16 +1100,16 @@
                         class="flex-1 t-bg-panel rounded-2xl shadow-sm border t-border-main overflow-hidden flex flex-col">
                         <!-- Batch Toolbar (Hidden by default) 搜索/我的收藏批量操作 -->
                         <div id="batch-toolbar"
-                            class="hidden bg-emerald-50 border-b border-emerald-200 p-3 flex items-center justify-between">
+                            class="hidden bg-emerald-50 dark:bg-emerald-900/20 border-b border-emerald-200 dark:border-emerald-800 p-3 flex items-center justify-between">
                             <div class="flex items-center gap-3">
-                                <span class="text-sm text-emerald-700">已选择: <span id="batch-selected-count"
-                                        class="font-bold">0</span> 首</span>
+                                <span class="text-sm text-emerald-700 dark:text-emerald-300">已选择: <span
+                                        id="batch-selected-count" class="font-bold">0</span> 首</span>
                                 <button onclick="selectAllVisible()"
-                                    class="text-xs px-3 py-1 t-bg-panel border border-emerald-300 rounded hover:bg-emerald-50 text-emerald-700">全选</button>
+                                    class="text-xs px-3 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded shadow-sm transition-all font-medium">全选</button>
                                 <button onclick="deselectAll()"
-                                    class="text-xs px-3 py-1 t-bg-panel border border-gray-300 rounded hover:t-bg-track t-text-muted">清空</button>
+                                    class="text-xs px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white rounded shadow-sm transition-all font-medium">清空</button>
                                 <button onclick="toggleBatchMode()"
-                                    class="text-xs px-3 py-1 t-bg-panel border border-red-300 rounded hover:bg-red-50 text-red-600 transition-colors">退出</button>
+                                    class="text-xs px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded shadow-sm transition-all font-medium">退出</button>
                             </div>
                             <div class="flex items-center gap-2">
                                 <button onclick="handleBatchCollect()"
@@ -976,26 +1132,34 @@
                         <!-- Header -->
                         <div id="search-results-header"
                             class="grid grid-cols-12 gap-2 md:gap-4 p-3 md:p-4 border-b t-border-main t-bg-main text-gray-500 text-sm font-medium">
-                            <div class="col-span-2 sm:col-span-1 text-center flex items-center justify-center gap-2">
+                            <div
+                                class="col-span-1 sm:col-span-1 text-center font-mono flex items-center justify-center gap-1 sm:gap-2">
+                                <button id="search-back-btn" onclick="goBackToSearch()"
+                                    class="hidden px-1.5 py-1 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                                    title="返回列表">
+                                    <i class="fas fa-arrow-left text-xs"></i>
+                                </button>
                                 <span>#</span>
                                 <div class="flex items-center gap-1">
                                     <button onclick="toggleBatchMode()"
-                                        class="text-xs text-emerald-600 hover:text-emerald-700" title="批量操作">
+                                        class="text-[10px] text-emerald-600 hover:text-emerald-700" title="批量操作">
                                         <i class="fas fa-tasks"></i>
                                     </button>
                                     <button onclick="window.ListSearch.toggleBar()"
-                                        class="text-xs text-emerald-600 hover:text-emerald-700" title="内搜索 (/)">
+                                        class="text-[10px] text-emerald-600 hover:text-emerald-700" title="内搜索 (/)">
                                         <i class="fas fa-search"></i>
                                     </button>
                                 </div>
                             </div>
-                            <div class="col-span-8 sm:col-span-7 md:col-span-6 lg:col-span-4" id="header-title">歌曲标题
+                            <div class="col-span-9 sm:col-span-7 md:col-span-6 lg:col-span-4" id="header-title">歌曲标题
                             </div>
                             <div
                                 class="hidden sm:block sm:col-span-3 md:col-span-3 lg:col-span-3 text-right md:text-left">
                                 歌手</div>
                             <div class="hidden lg:block lg:col-span-2" id="header-album">专辑</div>
-                            <div class="hidden md:block md:col-span-1 text-center">时长</div>
+                            <div class="hidden md:block md:col-span-1 text-right">时长</div>
+                            <div class="hidden sm:block sm:col-span-1 text-right">操作</div>
+                            <div class="col-span-2 sm:hidden text-right">操作</div>
                         </div>
 
                         <!-- Global Local Search Bar (Hidden by default) -->
@@ -1059,7 +1223,8 @@
                             </div>
                         </div>
                         <!-- Pagination -->
-                        <div class="h-12 border-t t-border-main flex items-center justify-between px-6 t-bg-main">
+                        <div id="search-pagination-bar"
+                            class="h-12 border-t t-border-main flex items-center justify-between px-6 t-bg-main">
                             <button onclick="prevPage()"
                                 class="text-gray-500 hover:text-emerald-600 disabled:opacity-30 transition-colors">
                                 <i class="fas fa-chevron-left"></i> 上一页
@@ -1137,7 +1302,7 @@
                         </div>
                         <div id="tag-container" class="flex-1 overflow-y-auto p-4 custom-scrollbar">
                             <div class="flex items-center justify-center py-10">
-                                <i class="fas fa-spinner fa-spin text-2xl text-emerald-500"></i>
+                                <i class="fas fa-circle-notch fa-spin text-2xl text-emerald-500"></i>
                             </div>
                         </div>
                     </div>
@@ -1147,9 +1312,9 @@
                         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6"
                             id="songlist-container">
                             <!-- Cards will be injected here -->
-                            <div class="col-span-full py-20 text-center t-text-muted">
-                                <i class="fas fa-spinner fa-spin text-4xl mb-4 text-emerald-500"></i>
-                                <p>正在加载歌单...</p>
+                            <div class="col-span-full py-20 text-center t-text-muted animate-fade-in">
+                                <i class="fas fa-circle-notch fa-spin text-4xl mb-4 text-emerald-500"></i>
+                                <p class="font-bold tracking-wider">正在加载歌单...</p>
                             </div>
                         </div>
 
@@ -1228,18 +1393,17 @@
                                     </div>
                                 </div>
                             </div>
-                            <!-- 歌单批量操作 -->
                             <div id="sl-batch-toolbar"
-                                class="hidden bg-emerald-50 border-b border-emerald-200 p-3 flex items-center justify-between">
+                                class="hidden bg-emerald-50 dark:bg-emerald-900/20 border-b border-emerald-200 dark:border-emerald-800 p-3 flex items-center justify-between">
                                 <div class="flex items-center gap-3">
-                                    <span class="text-sm text-emerald-700">已选择: <span id="sl-batch-selected-count"
-                                            class="font-bold">0</span> 首</span>
+                                    <span class="text-sm text-emerald-700 dark:text-emerald-300">已选择: <span
+                                            id="sl-batch-selected-count" class="font-bold">0</span> 首</span>
                                     <button onclick="selectAllVisible()"
-                                        class="text-xs px-3 py-1 t-bg-panel border border-emerald-300 rounded hover:bg-emerald-50 text-emerald-700">全选</button>
+                                        class="text-xs px-3 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded shadow-sm transition-all font-medium">全选</button>
                                     <button onclick="deselectAll()"
-                                        class="text-xs px-3 py-1 t-bg-panel border border-gray-300 rounded hover:t-bg-track t-text-muted">清空</button>
+                                        class="text-xs px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white rounded shadow-sm transition-all font-medium">清空</button>
                                     <button onclick="toggleBatchMode()"
-                                        class="text-xs px-3 py-1 t-bg-panel border border-red-300 rounded hover:bg-red-50 text-red-600 transition-colors">退出</button>
+                                        class="text-xs px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded shadow-sm transition-all font-medium">退出</button>
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <button onclick="handleBatchCollect()"
@@ -1260,23 +1424,24 @@
                             <!-- List Section -->
                             <div class="flex-1 flex flex-col overflow-hidden">
                                 <div
-                                    class="grid grid-cols-12 gap-4 p-4 border-b t-border-main t-bg-main text-gray-500 text-xs font-bold uppercase tracking-wider">
+                                    class="grid grid-cols-12 gap-2 md:gap-4 p-4 border-b t-border-main t-bg-main text-gray-500 text-xs font-bold uppercase tracking-wider">
                                     <div
-                                        class="col-span-1 text-center font-mono flex items-center justify-center gap-1">
+                                        class="col-span-1 sm:col-span-1 text-center font-mono flex items-center justify-center gap-1 sm:gap-2">
                                         <span>#</span>
-                                        <div class="flex items-center gap-1 ml-0.5">
+                                        <div class="flex items-center gap-1">
                                             <button onclick="toggleBatchMode()"
-                                                class="text-xs text-emerald-600 hover:text-emerald-700" title="批量操作">
+                                                class="text-[10px] text-emerald-600 hover:text-emerald-700"
+                                                title="批量操作">
                                                 <i class="fas fa-tasks"></i>
                                             </button>
                                             <button onclick="window.ListSearch.toggleBar()"
-                                                class="text-xs text-emerald-600 hover:text-emerald-700 ml-0.5"
+                                                class="text-[10px] text-emerald-600 hover:text-emerald-700"
                                                 title="歌单内搜索">
                                                 <i class="fas fa-search"></i>
                                             </button>
                                         </div>
                                     </div>
-                                    <div class="col-span-9 md:col-span-5 lg:col-span-4">歌曲</div>
+                                    <div class="col-span-9 sm:col-span-9 md:col-span-5 lg:col-span-4">歌曲</div>
                                     <div class="hidden md:block md:col-span-3">歌手</div>
                                     <div class="hidden lg:block lg:col-span-2">专辑</div>
                                     <div class="hidden md:block md:col-span-2 lg:col-span-1 text-right">时长</div>
@@ -1402,13 +1567,13 @@
                             </div>
                             <!-- 加载状态 -->
                             <div id="lb-boards-loading" class="hidden flex items-center justify-center py-8">
-                                <i class="fas fa-spinner fa-spin text-emerald-500 text-xl"></i>
+                                <i class="fas fa-circle-notch fa-spin text-emerald-500 text-xl"></i>
                             </div>
                             <div id="lb-boards-list" class="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-0.5"
                                 onclick="if(window.innerWidth <= 1024) toggleLbSidebar(false)">
                                 <!-- 榜单项由 JS 注入 -->
                                 <div class="p-4 text-center t-text-muted text-sm animate-pulse">
-                                    <i class="fas fa-spinner fa-spin"></i>
+                                    <i class="fas fa-circle-notch fa-spin"></i>
                                 </div>
                             </div>
                         </div>
@@ -1423,18 +1588,17 @@
                             <!-- ... (批量操作和搜索过滤维持原样) ... -->
                             <!-- 此处为了代码简洁，保留原有逻辑，仅外层容器调整 -->
                             <!-- 批量操作工具栏 -->
-                            <!-- 排行榜批量操 -->
                             <div id="lb-batch-toolbar"
                                 class="hidden bg-emerald-50 dark:bg-emerald-900/20 border-b border-emerald-200 dark:border-emerald-800 p-3 flex items-center justify-between flex-shrink-0">
                                 <div class="flex items-center gap-3">
                                     <span class="text-sm text-emerald-700 dark:text-emerald-300">已选择:
                                         <span id="lb-batch-selected-count" class="font-bold">0</span> 首</span>
                                     <button onclick="lbSelectAll()"
-                                        class="text-xs px-3 py-1 t-bg-panel border border-emerald-300 rounded hover:bg-emerald-50 text-emerald-700">全选</button>
+                                        class="text-xs px-3 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded shadow-sm transition-all font-medium">全选</button>
                                     <button onclick="deselectAll()"
-                                        class="text-xs px-3 py-1 t-bg-panel border border-gray-300 rounded hover:t-bg-track t-text-muted">清空</button>
+                                        class="text-xs px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white rounded shadow-sm transition-all font-medium">清空</button>
                                     <button onclick="toggleLbBatchMode()"
-                                        class="text-xs px-3 py-1 t-bg-panel border border-red-300 rounded hover:bg-red-50 text-red-600 transition-colors">退出</button>
+                                        class="text-xs px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded shadow-sm transition-all font-medium">退出</button>
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <button onclick="handleBatchCollect()"
@@ -1587,6 +1751,230 @@
                     </div>
                 </div>
 
+                <!-- Local Music View -->
+                <div id="view-localmusic"
+                    class="absolute inset-0 flex flex-col px-2 pt-2 md:px-6 md:pt-6 pb-44 md:pb-32 hidden opacity-0 transition-all duration-300 overflow-hidden">
+
+                    <!-- Settings and Filters Area -->
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4 shrink-0">
+                        <div class="flex items-center gap-3">
+                            <h2 class="text-xl font-bold t-text-main whitespace-nowrap">本地音乐</h2>
+                            <select id="lm-location-select" onchange="window.LocalMusicManager.changeLocation()"
+                                class="bg-gray-100 dark:bg-gray-700/50 border t-border-main rounded-xl px-2.5 py-1 text-xs focus:ring-2 focus:ring-emerald-500/50 transition-all t-text-main outline-none">
+                                <option value="root">根目录 (/)</option>
+                                <option value="data">数据目录 (/data)</option>
+                            </select>
+                            <div class="h-4 w-[1px] bg-gray-300 dark:bg-gray-700 mx-1"></div>
+                            <span id="lm-total-count" class="text-sm t-text-muted">加载中...</span>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <!-- 简易搜索块 -->
+                            <div class="relative group hidden sm:block w-48 md:w-64">
+                                <i
+                                    class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 t-text-muted group-focus-within:text-emerald-500 transition-colors"></i>
+                                <input type="text" id="lm-quick-search" placeholder="快速搜索..."
+                                    oninput="window.LocalMusicManager.handleQuickSearch(event)"
+                                    class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-xl pl-9 pr-4 py-1.5 text-sm focus:ring-2 focus:ring-emerald-500/50 transition-all">
+                            </div>
+
+                            <!-- 功能按钮组 -->
+                            <button onclick="window.LocalMusicManager.toggleFilterPanel()" id="lm-filter-toggle-btn"
+                                title="高级筛选"
+                                class="w-9 h-9 flex items-center justify-center bg-gray-100 dark:bg-gray-700/50 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-all relative">
+                                <i class="fas fa-filter text-sm"></i>
+                                <span id="lm-filter-active-dot"
+                                    class="hidden absolute top-2 right-2 w-2 h-2 bg-emerald-500 rounded-full border-2 border-white dark:border-gray-900"></span>
+                            </button>
+                            <button onclick="window.LocalMusicManager.refresh()" title="同步并刷新"
+                                class="w-9 h-9 flex items-center justify-center bg-gray-100 dark:bg-gray-700/50 rounded-xl hover:bg-emerald-500 hover:text-white transition-all">
+                                <i class="fas fa-sync-alt text-sm"></i>
+                            </button>
+                            <button onclick="window.LocalMusicManager.autoLinkAll()" title="智能检测并自动关联所有未索引歌曲"
+                                class="w-9 h-9 flex items-center justify-center bg-gray-100 dark:bg-gray-700/50 rounded-xl hover:bg-purple-500 hover:text-white transition-all">
+                                <i class="fas fa-magic text-sm"></i>
+                            </button>
+                            <button onclick="window.LocalMusicManager.toggleBatchMode()" title="批量操作"
+                                class="w-9 h-9 flex items-center justify-center bg-gray-100 dark:bg-gray-700/50 rounded-xl hover:bg-blue-500 hover:text-white transition-all">
+                                <i class="fas fa-list-ul text-sm"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 高级筛选面板 (折叠式) -->
+                    <div id="lm-filter-panel" class="hidden overflow-hidden mb-6 transition-all duration-300">
+                        <div
+                            class="bg-gray-100/50 dark:bg-gray-800/80 rounded-2xl p-4 md:p-5 border border-gray-200 dark:border-gray-700 backdrop-blur-md shadow-sm relative overflow-hidden">
+                            <!-- 装饰背景 -->
+                            <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-emerald-500/5 rounded-full blur-2xl">
+                            </div>
+
+                            <div
+                                class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 md:gap-6 relative z-10">
+                                <!-- 关键词搜索 -->
+                                <div class="space-y-2">
+                                    <label
+                                        class="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">搜索关键词</label>
+                                    <div class="relative">
+                                        <i
+                                            class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                                        <input type="text" id="lm-search-input" placeholder="歌曲、歌手、专辑..."
+                                            oninput="window.LocalMusicManager.applyFilters()"
+                                            class="w-full bg-white/80 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl pl-9 pr-4 py-2 text-sm focus:ring-2 focus:ring-emerald-500/50 transition-all outline-none t-text-main backdrop-blur-sm">
+                                    </div>
+                                </div>
+
+                                <!-- 音质筛选 -->
+                                <div class="space-y-2">
+                                    <label
+                                        class="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">音频音质</label>
+                                    <select id="lm-quality-select" onchange="window.LocalMusicManager.applyFilters()"
+                                        class="w-full bg-white/80 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/50 transition-all outline-none appearance-none t-text-main backdrop-blur-sm">
+                                        <option value="all">全部音质</option>
+                                        <option value="128k">标准 (128k)</option>
+                                        <option value="320k">高品质 (320k)</option>
+                                        <option value="flac">无损 (FLAC)</option>
+                                        <option value="flac24bit">极高无损 (Hi-Res)</option>
+                                    </select>
+                                </div>
+
+                                <!-- 目录与状态 -->
+                                <div class="space-y-2">
+                                    <label
+                                        class="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">存储/来源</label>
+                                    <div class="flex gap-2">
+                                        <select id="lm-folder-select" onchange="window.LocalMusicManager.applyFilters()"
+                                            class="flex-1 bg-white/80 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/50 transition-all outline-none t-text-main backdrop-blur-sm">
+                                            <option value="all">所有目录</option>
+                                            <option value="music">下载目录</option>
+                                            <option value="cache">缓存目录</option>
+                                        </select>
+                                        <select id="lm-status-select" onchange="window.LocalMusicManager.applyFilters()"
+                                            class="flex-1 bg-white/80 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/50 transition-all outline-none t-text-main backdrop-blur-sm">
+                                            <option value="all">全部状态</option>
+                                            <option value="missing_id3">缺少标签</option>
+                                            <option value="missing_cover">缺少封面</option>
+                                            <option value="missing_lyric">缺少歌词</option>
+                                            <option value="unindexed">未索引文件</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- 排序设置 -->
+                                <div class="space-y-2">
+                                    <label
+                                        class="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">排序方式</label>
+                                    <div class="flex gap-2">
+                                        <select id="lm-sort-by" onchange="window.LocalMusicManager.applyFilters()"
+                                            class="flex-[1.2] bg-white/80 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/50 transition-all outline-none t-text-main backdrop-blur-sm">
+                                            <option value="mtime">添加时间</option>
+                                            <option value="name">歌曲名称</option>
+                                            <option value="singer">歌手名称</option>
+                                            <option value="album">专辑名称</option>
+                                            <option value="source">平台来源</option>
+                                            <option value="size">文件大小</option>
+                                        </select>
+                                        <select id="lm-sort-order" onchange="window.LocalMusicManager.applyFilters()"
+                                            class="flex-1 bg-white/80 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/50 transition-all outline-none t-text-main backdrop-blur-sm">
+                                            <option value="desc">降序</option>
+                                            <option value="asc">升序</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- 动态操作 -->
+                                <div class="flex flex-col justify-end">
+                                    <div class="flex">
+                                        <button onclick="window.LocalMusicManager.clearFilters()"
+                                            class="w-full bg-gray-200/50 hover:bg-gray-300/50 dark:bg-gray-700/50 dark:hover:bg-gray-600/50 t-text-main py-2.5 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 border border-gray-200 dark:border-gray-600">
+                                            <i class="fas fa-undo-alt text-xs opacity-60"></i> 重置所有筛选条件
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 批量操作栏 -->
+                    <div id="lm-batch-toolbar"
+                        class="hidden bg-emerald-50 dark:bg-emerald-900/20 border-b border-emerald-200 dark:border-emerald-800 p-3 flex items-center justify-between shrink-0 rounded-t-xl transition-all">
+                        <div class="flex items-center gap-3">
+                            <span class="text-sm text-emerald-700 dark:text-emerald-300">已选择: <span
+                                    id="lm-batch-selected-count" class="font-bold">0</span> 首</span>
+                            <button onclick="window.LocalMusicManager.selectAll()"
+                                class="text-xs px-3 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded shadow-sm transition-all font-medium">全选</button>
+                            <button onclick="window.LocalMusicManager.deselectAll()"
+                                class="text-xs px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white rounded shadow-sm transition-all font-medium">清空</button>
+                            <button onclick="window.LocalMusicManager.toggleBatchMode()"
+                                class="text-xs px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded shadow-sm transition-all font-medium">退出</button>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="window.LocalMusicManager.batchFetchLyrics()"
+                                class="text-xs px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors shadow-sm"
+                                title="批量补全歌词">
+                                <i class="fas fa-closed-captioning md:mr-1"></i><span
+                                    class="hidden md:inline">补全歌词</span>
+                            </button>
+                            <button onclick="window.LocalMusicManager.batchUpdateMetadata()"
+                                class="text-xs px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded transition-colors shadow-sm"
+                                title="批量补全元信息(封面/标签)">
+                                <i class="fas fa-tags md:mr-1"></i><span class="hidden md:inline">补全元信息</span>
+                            </button>
+                            <button onclick="window.LocalMusicManager.batchSwitchFolder()"
+                                class="text-xs px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded transition-colors shadow-sm"
+                                title="移动到对面目录 (Download <-> Cache)">
+                                <i class="fas fa-exchange-alt md:mr-1"></i><span class="hidden md:inline">移动目录</span>
+                            </button>
+                            <button onclick="window.LocalMusicManager.batchSwitchBaseLocation()"
+                                class="text-xs px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors shadow-sm"
+                                title="在 本地 与 云端(WebDAV数据目录) 之间互转">
+                                <i class="fas fa-cloud-upload-alt md:mr-1"></i><span
+                                    class="hidden md:inline">云端同步</span>
+                            </button>
+
+
+                            <button onclick="window.LocalMusicManager.batchDownloadToDevice()"
+                                class="text-xs px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded transition-colors shadow-sm"
+                                title="保存到设备">
+                                <i class="fas fa-download md:mr-1"></i><span class="hidden md:inline">保存</span>
+                            </button>
+                            <button onclick="window.LocalMusicManager.batchDelete()"
+                                class="text-xs px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded transition-colors shadow-sm"
+                                title="批量删除">
+                                <i class="fas fa-trash-alt md:mr-1"></i><span class="hidden md:inline">删除</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Header Row -->
+                    <div
+                        class="grid grid-cols-12 gap-2 md:gap-4 p-4 border-b t-border-main t-bg-main text-gray-500 text-[10px] sm:text-xs font-bold uppercase tracking-wider shrink-0 mt-2 rounded-t-xl">
+                        <div class="col-span-1 text-center font-mono flex items-center justify-center">
+                            <div class="flex items-center gap-1">
+                                <span>#</span>
+                                <button onclick="window.LocalMusicManager.toggleBatchMode()"
+                                    class="text-[10px] text-emerald-600 hover:text-emerald-700" title="批量操作">
+                                    <i class="fas fa-tasks"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-span-8 sm:col-span-5 md:col-span-4 lg:col-span-4">歌曲</div>
+                        <div class="hidden sm:block sm:col-span-4 md:col-span-3 lg:col-span-2">歌手</div>
+                        <div class="hidden lg:block lg:col-span-2">专辑</div>
+                        <div class="hidden md:block md:col-span-2 lg:col-span-1">来源/信息</div>
+                        <div class="col-span-3 sm:col-span-2 md:col-span-2 lg:col-span-2 text-right">操作</div>
+                    </div>
+
+                    <!-- List Area -->
+                    <div id="lm-list-container"
+                        class="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar pb-20 rounded-b-xl border border-t-0 t-border-main t-bg-panel">
+                        <div class="text-center py-20 text-gray-500 animate-fade-in">
+                            <i class="fas fa-circle-notch fa-spin text-4xl mb-4 text-emerald-500"></i>
+                            <p class="font-bold tracking-wider">正在加载本地音乐...</p>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Settings View -->
                 <div id="view-settings"
                     class="absolute inset-0 overflow-y-auto overflow-x-hidden custom-scrollbar px-4 pt-6 pb-44 md:pb-32 hidden opacity-0 transition-all duration-300">
@@ -1646,7 +2034,7 @@
                                         <div class="text-xs t-text-muted mt-1 font-medium italic opacity-80">Custom
                                             Source Management</div>
                                     </div>
-                                    <button onclick="openCustomSourceModal()"
+                                    <button id="btn-custom-source-manage" onclick="openCustomSourceModal()"
                                         class="flex-shrink-0 px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-black text-sm rounded-xl shadow-lg shadow-emerald-200/50 hover:shadow-emerald-300/50 transition-all hover:scale-105 active:scale-95 flex items-center gap-2">
                                         <i class="fas fa-plus-circle"></i> 管理 / 添加
                                     </button>
@@ -2105,10 +2493,8 @@
                                                 <span class="setting-tooltip-trigger ml-1">
                                                     <i class="fas fa-question-circle"></i>
                                                     <span class="setting-tooltip-content">未开启时下载到 /server/cache/用户名 (或
-                                                        /server/data/cache/)，命名为
-                                                        {Name}_-_{Singer}_-_{Source}_-_{ID}_-_{Quality}；<br>开启后下载到
-                                                        /server/music/用户名 (或 /server/data/music/)，命名为 {Name} - {Singer}
-                                                        - {Quality}。</span>
+                                                        /server/data/cache/)；<br>开启后下载到
+                                                        /server/music/用户名 (或 /server/data/music/)。</span>
                                                 </span>
                                             </div>
                                         </div>
@@ -2139,6 +2525,25 @@
                                             class="w-full t-bg-main border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-emerald-500 focus:border-emerald-500 block p-2.5">
                                             <option value="data">DATA_PATH (WebDAV同步)</option>
                                             <option value="root">运行目录 (仅本地)</option>
+                                        </select>
+
+                                        <div class="mt-4 mb-2 flex items-center justify-between">
+                                            <div class="text-sm font-bold t-text-main flex items-center">
+                                                歌曲命名方式 (Naming)
+                                                <span class="setting-tooltip-trigger ml-1">
+                                                    <i class="fas fa-question-circle"></i>
+                                                    <span
+                                                        class="setting-tooltip-content">设置服务端存储文件的命名规则（对标准缓存和仅下载模式均生效）。不影响已有文件。</span>
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <select id="setting-server-cache-naming"
+                                            onchange="updateSetting('serverCacheNamingPattern', this.value); updateServerCacheConfig(null, this.value)"
+                                            class="w-full t-bg-main border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-emerald-500 focus:border-emerald-500 block p-2.5">
+                                            <option value="standard">标准 (Name_-_Singer_-_Source_-_ID_-_Quality)</option>
+                                            <option value="simple">简洁 (Name - Singer - Quality)</option>
+                                            <option value="artist-title">歌手 - 歌名 (Singer - Name - Quality)</option>
+                                            <option value="title-only">仅歌名 (Name - Quality)</option>
                                         </select>
                                     </div>
 
@@ -2175,8 +2580,14 @@
                                                 </span>
                                             </span>
                                         </div>
-                                        <span id="server-cache-info"
-                                            class="text-sm font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">计算中...</span>
+                                        <div class="flex flex-col gap-1 text-right">
+                                            <div id="server-music-info" title="仅下载模式目录 (/music)"
+                                                class="text-[10px] md:text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                                                正在统计音乐...</div>
+                                            <div id="server-cache-info" title="标准缓存目录 (/cache)"
+                                                class="text-[10px] md:text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
+                                                正在统计缓存...</div>
+                                        </div>
                                     </div>
 
                                     <!-- Action Buttons -->
@@ -2785,6 +3196,33 @@
                                                 <input type="checkbox" id="setting-switch-playlist-search"
                                                     class="sr-only peer"
                                                     onchange="updateSetting('switchPlaylistOnSearchPlay', this.checked)">
+                                                <div
+                                                    class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500 transition-all">
+                                                </div>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <!-- Deduplicate Playlist by Quality -->
+                                    <div
+                                        class="t-bg-panel rounded-xl border t-border-main p-4 hover:shadow-sm transition-shadow">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <h4 class="text-sm font-bold t-text-main flex items-center">
+                                                    本地列表播放去重 (Deduplicate Local List)
+                                                    <span class="setting-tooltip-trigger ml-1">
+                                                        <i class="fas fa-question-circle"></i>
+                                                        <span class="setting-tooltip-content">
+                                                            当播放本地音乐（列表）时，若存在同 ID
+                                                            但音质不同的歌曲文件，仅保留最高音质版本。说明有相同id歌曲，只播放最高音质歌曲。
+                                                        </span>
+                                                    </span>
+                                                </h4>
+                                            </div>
+                                            <label class="relative inline-flex items-center cursor-pointer">
+                                                <input type="checkbox" id="setting-deduplicate-playlist"
+                                                    class="sr-only peer"
+                                                    onchange="updateSetting('deduplicatePlaylistByQuality', this.checked)">
                                                 <div
                                                     class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500 transition-all">
                                                 </div>
@@ -3503,8 +3941,14 @@
 
             <!-- Body -->
             <div class="p-8 space-y-6">
+                <!-- [新增] 腾讯音源特有入口 -->
+                <div id="tx-user-playlist-entry" class="hidden text-right -mb-4">
+                    <a href="javascript:void(0)" onclick="window.SongListManager.openQQInputModal()"
+                        class="text-xs text-emerald-500 hover:text-emerald-600 transition-colors">QQ号添加 -></a>
+                </div>
+
                 <div class="flex gap-4">
-                    <select id="external-list-source"
+                    <select id="external-list-source" onchange="window.SongListManager.onExternalSourceChange()"
                         class="p-3 border t-border-main rounded-xl t-bg-main text-sm focus:ring-2 focus:ring-emerald-400 focus:outline-none min-w-[120px]">
                         <option value="wy">网易音乐</option>
                         <option value="tx">腾讯音乐</option>
@@ -3544,6 +3988,54 @@
                         立即打开
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- QQ ID Input Modal -->
+    <div id="qq-input-modal"
+        class="fixed inset-0 bg-black/40 z-[80] hidden items-center justify-center backdrop-blur-sm transition-opacity duration-300">
+        <div class="t-bg-panel rounded-2xl w-full max-w-sm flex flex-col shadow-2xl transform transition-all duration-300 scale-95 opacity-0 overflow-hidden"
+            id="qq-input-modal-content">
+            <div class="p-6 border-b t-border-main flex justify-between items-center t-bg-main">
+                <h3 class="text-lg font-bold t-text-main">通过 QQ 号拉取歌单</h3>
+                <button onclick="window.SongListManager.closeQQInputModal()"
+                    class="t-text-muted hover:text-red-500 transition-colors p-2">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <input type="text" id="qq-input-field" placeholder="请输入 QQ 号"
+                    class="w-full p-3 border t-border-main rounded-xl t-bg-main text-sm focus:ring-2 focus:ring-emerald-400 focus:outline-none">
+                <button onclick="window.SongListManager.handleQQSubmit()"
+                    class="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold transition-all shadow-lg active:scale-95">
+                    立即获取
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Playlist Selection Modal -->
+    <div id="user-playlist-modal"
+        class="fixed inset-0 bg-black/40 z-[90] hidden items-center justify-center backdrop-blur-sm transition-opacity duration-300">
+        <div class="t-bg-panel rounded-2xl w-full max-w-lg flex flex-col shadow-2xl transform transition-all duration-300 scale-95 opacity-0 overflow-hidden max-h-[80vh]"
+            id="user-playlist-modal-content">
+            <div class="p-6 border-b t-border-main flex justify-between items-center t-bg-main">
+                <div class="flex items-center gap-4">
+                    <img id="user-playlist-avatar" src=""
+                        class="hidden w-12 h-12 rounded-full border-2 border-emerald-400/30 object-cover">
+                    <div class="flex-1">
+                        <h3 class="text-xl font-bold t-text-main" id="user-playlist-title">选择歌单</h3>
+                        <p class="text-xs t-text-muted mt-0.5" id="user-playlist-subtitle">加载中...</p>
+                    </div>
+                </div>
+                <button onclick="window.SongListManager.closeUserPlaylistModal()"
+                    class="t-text-muted hover:text-red-500 transition-colors p-2">
+                    <i class="fas fa-times text-lg"></i>
+                </button>
+            </div>
+            <div class="p-4 overflow-y-auto space-y-2" id="user-playlist-container">
+                <!-- Playlists will be rendered here -->
             </div>
         </div>
     </div>
@@ -3638,7 +4130,7 @@
             </div>
 
             <!-- Toolbar -->
-            <div class="p-4 border-b t-border-main flex gap-3 t-bg-panel">
+            <div id="custom-source-toolbar" class="p-4 border-b t-border-main flex gap-3 t-bg-panel">
                 <input type="file" id="script-file" accept=".js" class="hidden" onchange="handleFileUpload(this)">
                 <button onclick="document.getElementById('script-file').click()"
                     class="flex-1 flex items-center justify-center px-4 py-2.5 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-colors font-medium">
@@ -4417,26 +4909,27 @@
     <!-- Audio Element -->
     <audio id="audio-player" crossorigin="anonymous"></audio>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
-    <script src="/music/js/NoSleep.min.js"></script>
-    <script src="/music/js/log_viewer.js"></script>
-    <script src="/music/js/lyric-utils.js"></script>
-    <script src="/music/js/lyric-parser.js"></script>
-    <script src="/music/js/quality.js"></script>
-    <script src="/music/js/user_sync.js"></script>
-    <script src="/music/js/batch_pagination.js"></script>
-    <script src="/music/js/single_song_ops.js"></script>
-    <script src="/music/js/theme_manager.js"></script>
-    <script src="/music/js/list_search.js"></script>
-    <script src="/music/js/songlist_manager.js"></script>
-    <script src="/music/js/leaderboard_manager.js"></script>
-    <script src="/music/js/wave.js"></script>
-    <script src="/music/js/visualizer.js"></script>
-    <script src="/music/js/pwa.js"></script>
-    <script src="/music/js/lyric-card.js"></script>
-    <script src="/music/js/ios-background-audio.js"></script>
-    <script src="/music/js/sound-effects.js"></script>
-    <script src="/music/js/download_manager.js"></script>
-    <script src="/music/app.js"></script>
+    <script src="js/NoSleep.min.js"></script>
+    <script src="js/log_viewer.js"></script>
+    <script src="js/lyric-utils.js"></script>
+    <script src="js/lyric-parser.js"></script>
+    <script src="js/quality.js"></script>
+    <script src="js/user_sync.js"></script>
+    <script src="js/batch_pagination.js"></script>
+    <script src="js/single_song_ops.js"></script>
+    <script src="js/theme_manager.js"></script>
+    <script src="js/list_search.js"></script>
+    <script src="js/songlist_manager.js"></script>
+    <script src="js/leaderboard_manager.js"></script>
+    <script src="js/wave.js"></script>
+    <script src="js/visualizer.js"></script>
+    <script src="js/pwa.js"></script>
+    <script src="js/lyric-card.js"></script>
+    <script src="js/ios-background-audio.js"></script>
+    <script src="js/sound-effects.js"></script>
+    <script src="js/download_manager.js"></script>
+    <script src="js/local_music.js"></script>
+    <script src="app.js"></script>
     <script>
         // Setting Tooltips Mobile Support
         document.addEventListener('click', function (e) {
@@ -4691,13 +5184,13 @@
                 </div>
             </div>
         </div>
-    </div>
-    <script>
-        function goToAdmin() {
-            var adminPath = (window.CONFIG && window.CONFIG['admin.path']) || '';
-            location.href = adminPath || '/';
-        }
-    </script>
+</body>
+<script>
+    function goToAdmin() {
+        var adminPath = (window.CONFIG && window.CONFIG['admin.path']) || '';
+        location.href = adminPath || '/';
+    }
+</script>
 </body>
 
 </html>

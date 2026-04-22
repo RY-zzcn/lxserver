@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lx-sync-server-v1';
+const CACHE_NAME = 'lx-sync-server-v2';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',

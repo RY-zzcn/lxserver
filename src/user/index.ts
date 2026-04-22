@@ -12,8 +12,9 @@ export interface UserSpace {
   removeDevice: (clientId: string) => Promise<void>
 }
 const users = new Map<string, UserSpace>()
+const renamingUsers = new Set<string>()
 
-const delayTime = 10 * 1000
+const delayTime = 60 * 60 * 1000 // 延长到 1 小时
 const delayReleaseTimeouts = new Map<string, NodeJS.Timeout>()
 const clearDelayReleaseTimeout = (userName: string) => {
   if (!delayReleaseTimeouts.has(userName)) return
@@ -29,6 +30,9 @@ const seartDelayReleaseTimeout = (userName: string) => {
 }
 
 export const getUserSpace = (userName: string) => {
+  if (renamingUsers.has(userName)) {
+    throw new Error(`User ${userName} is being renamed, access denied temporarily`)
+  }
   clearDelayReleaseTimeout(userName)
 
   let user = users.get(userName)
@@ -58,6 +62,24 @@ export const releaseUserSpace = (userName: string, force = false) => {
     clearDelayReleaseTimeout(userName)
     users.delete(userName)
   } else seartDelayReleaseTimeout(userName)
+}
+
+/**
+ * 重命名用户空间缓存并加锁
+ * @param oldName 旧用户名
+ */
+export const renameUserSpace = (oldName: string) => {
+  clearDelayReleaseTimeout(oldName)
+  users.delete(oldName)
+  renamingUsers.add(oldName)
+}
+
+/**
+ * 解除重命名锁定
+ * @param oldName 旧用户名
+ */
+export const finishRenameUserSpace = (oldName: string) => {
+  renamingUsers.delete(oldName)
 }
 
 

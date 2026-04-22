@@ -6,6 +6,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LX Music Sync Server - 管理控制台</title>
     <!-- Config MUST be loaded before PostHog -->
+    <script>
+        (function () {
+            var pathname = window.location.pathname;
+            var baseHref = pathname.endsWith('/') ? pathname : pathname + '/';
+            var baseTag = document.createElement('base');
+            baseTag.href = baseHref;
+            document.head.prepend(baseTag);
+            console.log('[Admin] Base href set to:', baseHref);
+        })();
+    </script>
     <script src="/js/config.js"></script>
     <!-- PostHog Analytics -->
     <script>
@@ -20,7 +30,8 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
+                // 使用相对路径，它会自动基于 <base> 路径解析
+                navigator.serviceWorker.register('sw.js')
                     .then(registration => {
                         console.log('ServiceWorker registration successful');
                     })
@@ -30,8 +41,8 @@
             });
         }
     </script>
-    <script src="/vendor/js/marked.min.js"></script>
-    <script src="/music/assets/tailwindcss.js"></script>
+    <script src="vendor/js/marked.min.js"></script>
+    <script src="music/assets/tailwindcss.js"></script>
     <script>
         tailwind.config = {
             corePlugins: {
@@ -39,10 +50,10 @@
             }
         }
     </script>
-    <link rel="stylesheet" href="/music/assets/fontawesome/css/all.min.css">
-    <script src="/js/ui-utils.js"></script>
-    <script src="/js/notification-engine.js"></script>
-    <link href="/vendor/fonts/inter.css" rel="stylesheet">
+    <link rel="stylesheet" href="music/assets/fontawesome/css/all.min.css">
+    <script src="js/ui-utils.js"></script>
+    <script src="js/notification-engine.js"></script>
+    <link href="vendor/fonts/inter.css" rel="stylesheet">
 </head>
 
 <body>
@@ -656,33 +667,22 @@
                                     <label class="config-label">前端访问密码</label>
                                     <input type="password" name="frontend.password" class="form-input config-input"
                                         placeholder="管理控制台登录密码" />
-                                </div>
-                                <div class="config-divider"></div>
-                                <div class="config-toggle-row">
-                                    <div class="config-toggle-info">
-                                        <span class="config-toggle-label">启用 Web 播放器密码</span>
-                                        <span class="config-toggle-desc">开启后访问播放器需要验证密码</span>
+                                    <div class="config-divider"></div>
+                                    <div class="config-toggle-row">
+                                        <div class="config-toggle-info">
+                                            <span class="config-toggle-label">启用 Web 播放器密码</span>
+                                            <span class="config-toggle-desc">开启后访问播放器需要验证密码</span>
+                                        </div>
+                                        <label class="toggle-switch">
+                                            <input type="checkbox" name="player.enableAuth" />
+                                            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                                        </label>
                                     </div>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" name="player.enableAuth" />
-                                        <span class="toggle-track"><span class="toggle-thumb"></span></span>
-                                    </label>
-                                </div>
-                                <div class="config-field">
-                                    <label class="config-label">Web 播放器访问密码</label>
-                                    <input type="password" name="player.password" class="form-input config-input"
-                                        placeholder="播放器专属密码" />
-                                </div>
-                                <div class="config-divider"></div>
-                                <div class="config-toggle-row">
-                                    <div class="config-toggle-info">
-                                        <span class="config-toggle-label">开启公开功能限制</span>
-                                        <span class="config-toggle-desc">未验证用户进入播放器将被限制功能</span>
+                                    <div class="config-field">
+                                        <label class="config-label">Web 播放器访问密码</label>
+                                        <input type="password" name="player.password" class="form-input config-input"
+                                            placeholder="播放器专属密码" />
                                     </div>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" name="user.enablePublicRestriction" />
-                                        <span class="toggle-track"><span class="toggle-thumb"></span></span>
-                                    </label>
                                 </div>
                             </div>
                         </div>
@@ -799,11 +799,66 @@
                                     <label class="config-label">播放器路径</label>
                                     <input type="text" name="player.path" id="player-path-input"
                                         class="form-input config-input" placeholder="/music" />
-                                    <small class="config-hint">以 / 开头，不能为空。不能和后台路径相同，不能以 /api 开头。</small>
+                                    <small class="config-hint">以 / 开头，留空或输入 / 表示根路径。不能和后台路径相同，不能以 /api 开头。</small>
                                 </div>
                                 <div id="path-conflict-error"
                                     style="display:none; color: #ef4444; font-size: 0.85rem; margin-top: 4px; padding: 6px 10px; background: rgba(239,68,68,0.08); border-radius: 6px;">
                                     ⚠️ 路径配置有误，请检查后重试
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 用户权限限制配置卡片 -->
+                        <div class="config-card glass">
+                            <div class="config-card-header">
+                                <div class="config-card-icon"
+                                    style="background: linear-gradient(135deg, #6366f1, #4f46e5);">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h3 class="config-card-title">权限与缓存限制</h3>
+                                    <p class="config-card-desc">针对公开用户与普通登录用户的权限管控</p>
+                                </div>
+                            </div>
+                            <div class="config-card-body">
+                                <div class="config-toggle-row">
+                                    <div class="config-toggle-info">
+                                        <span class="config-toggle-label">开启公开用户限制</span>
+                                        <span class="config-toggle-desc">开启后，未验证的公开用户将被限制核心缓存设置与公开音源查看管理</span>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" name="user.enablePublicRestriction" />
+                                        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                                    </label>
+                                </div>
+                                <div class="config-divider"></div>
+                                <div class="config-toggle-row">
+                                    <div class="config-toggle-info">
+                                        <span class="config-toggle-label">开启登录用户缓存限制</span>
+                                        <span class="config-toggle-desc">开启后，所有非管理员登录用户将被限制核心缓存设置（不影响音源管理）</span>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" name="user.enableLoginCacheRestriction" />
+                                        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                                    </label>
+                                </div>
+                                <div class="config-divider"></div>
+                                <div class="config-toggle-row">
+                                    <div class="config-toggle-info">
+                                        <span class="config-toggle-label">开启缓存空间限制</span>
+                                        <span class="config-toggle-desc">开启后，当缓存总量超出限制时将按时间顺序（LRU）自动清理最旧文件</span>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" name="user.enableCacheSizeLimit" />
+                                        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                                    </label>
+                                </div>
+                                <div class="config-field">
+                                    <label class="config-label">空间限制大小 (MB)</label>
+                                    <input type="number" name="user.cacheSizeLimit" class="form-input config-input"
+                                        placeholder="默认 2000" min="10" />
                                 </div>
                             </div>
                         </div>
@@ -840,6 +895,17 @@
                                     <input type="text" name="subsonic.path" class="form-input config-input"
                                         placeholder="/rest" />
                                     <small class="config-hint">Subsonic API 默认路径为 /rest。修改后需在客户端同步更新 URL</small>
+                                </div>
+                                <div class="config-divider"></div>
+                                <div class="config-field">
+                                    <label class="config-label">歌手信息源优先级</label>
+                                    <select name="singer.sourcePriority" class="form-input config-input">
+                                        <option value="tx,wy">TX 优先</option>
+                                        <option value="wy,tx">WY 优先</option>
+                                        <option value="tx">仅 TX</option>
+                                        <option value="wy">仅 WY</option>
+                                    </select>
+                                    <small class="config-hint">设置歌手详情、头像及简介的获取来源优先级</small>
                                 </div>
                             </div>
                         </div>
@@ -1161,6 +1227,27 @@
             <div class="modal-footer">
                 <button class="btn-secondary modal-close">取消</button>
                 <button id="save-password-btn" class="btn-primary">保存</button>
+            </div>
+        </div>
+    </div>
+    <div id="rename-user-modal" class="modal hidden">
+        <div class="modal-content glass">
+            <div class="modal-header">
+                <h3>修改用户名</h3>
+                <button class="modal-close">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>新用户名</label>
+                    <input type="text" id="rename-user-input" class="form-input" placeholder="请输入新用户名">
+                </div>
+                <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 10px;">
+                    ⚠️ 修改用户名将导致所有已连接设备断开，且文件夹名会随之更改，同步过程数据将短暂离线。
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary modal-close">取消</button>
+                <button id="save-rename-user-btn" class="btn-primary">保存</button>
             </div>
         </div>
     </div>

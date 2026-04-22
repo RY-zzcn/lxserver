@@ -197,6 +197,7 @@ jobs:
       - name: Install and Build
         run: |
           npm ci
+          node scripts/download-binary.js --all
           npm run build
           # 清理开发依赖，仅保留生产运行环境
           rm -rf node_modules

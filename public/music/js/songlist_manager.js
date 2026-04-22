@@ -32,6 +32,15 @@ window.SongListManager = (function () {
     // Initialize
     function init() {
         console.log('[SongList] Initializing...');
+
+        // 优先从缓存读取
+        const cachedSource = localStorage.getItem('songlist-source');
+        if (cachedSource) {
+            currentState.source = cachedSource;
+            const sel = document.getElementById('songlist-source');
+            if (sel) sel.value = cachedSource;
+        }
+
         renderSortTabs();
         loadTags();
         loadList();
@@ -84,6 +93,48 @@ window.SongListManager = (function () {
             }, 10);
             // Default select current source
             document.getElementById('external-list-source').value = currentState.source;
+            // Trigger entry check
+            window.SongListManager.onExternalSourceChange();
+        } else {
+            content.classList.remove('scale-100', 'opacity-100');
+            content.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                modal.classList.remove('flex');
+                modal.classList.add('hidden');
+            }, 300);
+        }
+    }
+
+    function toggleQQInputModal(show) {
+        const modal = document.getElementById('qq-input-modal');
+        const content = document.getElementById('qq-input-modal-content');
+        if (show) {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            setTimeout(() => {
+                content.classList.remove('scale-95', 'opacity-0');
+                content.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        } else {
+            content.classList.remove('scale-100', 'opacity-100');
+            content.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                modal.classList.remove('flex');
+                modal.classList.add('hidden');
+            }, 300);
+        }
+    }
+
+    function toggleUserPlaylistModal(show) {
+        const modal = document.getElementById('user-playlist-modal');
+        const content = document.getElementById('user-playlist-modal-content');
+        if (show) {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            setTimeout(() => {
+                content.classList.remove('scale-95', 'opacity-0');
+                content.classList.add('scale-100', 'opacity-100');
+            }, 10);
         } else {
             content.classList.remove('scale-100', 'opacity-100');
             content.classList.add('scale-95', 'opacity-0');
@@ -414,7 +465,7 @@ window.SongListManager = (function () {
             return `
             <div id="sl-row-${index}" class="${rowClass}" data-song-id="${String(song.id)}" 
                  onclick="window.SongListManager.handleRowClick(${index})">
-                <div class="col-span-1 text-center text-gray-400 font-mono text-xs flex items-center justify-center">
+                <div class="col-span-1 sm:col-span-1 text-center text-gray-400 font-mono text-xs flex items-center justify-center">
                     ${window.batchMode ? `
                         <input type="checkbox" 
                                class="batch-checkbox w-4 h-4 text-emerald-600 rounded" 
@@ -424,7 +475,7 @@ window.SongListManager = (function () {
                     ` : index + 1}
                 </div>
                 <!-- Title & Info -->
-                <div class="col-span-9 md:col-span-5 lg:col-span-4 flex items-center gap-3 min-w-0">
+                <div class="col-span-9 sm:col-span-9 md:col-span-5 lg:col-span-4 flex items-center gap-3 min-w-0">
                     <div class="w-10 h-10 md:w-12 md:h-12 flex-shrink-0 relative rounded-lg overflow-hidden shadow-sm border t-border-main group-hover:shadow-md transition-all group-hover:scale-105 duration-300">
                         <img data-src="${window.getImgUrl ? window.getImgUrl(song) : (song.img || song.albumImg || '/music/assets/logo.svg')}" src="/music/assets/logo.svg"
                              class="lazy-image w-full h-full object-cover dynamic-logo is-placeholder" 
@@ -503,6 +554,10 @@ window.SongListManager = (function () {
         },
         changeSource: function () {
             currentState.source = document.getElementById('songlist-source').value;
+
+            // 保存到缓存
+            localStorage.setItem('songlist-source', currentState.source);
+
             currentState.tagId = '';
             currentState.tagName = '全部分类';
             document.getElementById('current-tag-name').innerText = '全部分类';
@@ -609,6 +664,89 @@ window.SongListManager = (function () {
                 list: detailState.list
             };
         },
+        onExternalSourceChange: function () {
+            const source = document.getElementById('external-list-source').value;
+            const entry = document.getElementById('tx-user-playlist-entry');
+            if (source === 'tx') {
+                entry.classList.remove('hidden');
+            } else {
+                entry.classList.add('hidden');
+            }
+        },
+        openQQInputModal: function () {
+            toggleQQInputModal(true);
+        },
+        closeQQInputModal: function () {
+            toggleQQInputModal(false);
+            document.getElementById('qq-input-field').value = '';
+        },
+        handleQQSubmit: async function () {
+            const uid = document.getElementById('qq-input-field').value.trim();
+            if (!uid) {
+                if (window.showToast) window.showToast('info', '请输入 QQ 号');
+                return;
+            }
+            this.closeQQInputModal();
+            this.closeExternalListModal();
+
+            toggleUserPlaylistModal(true);
+            const container = document.getElementById('user-playlist-container');
+            const title = document.getElementById('user-playlist-title');
+            const subtitle = document.getElementById('user-playlist-subtitle');
+            const avatarImg = document.getElementById('user-playlist-avatar');
+
+            title.innerText = '拉取 QQ 歌单';
+            subtitle.innerText = `正在拉取用户 ${uid} 的歌单...`;
+            avatarImg.classList.add('hidden');
+            container.innerHTML = '<div class="flex items-center justify-center py-20"><i class="fas fa-spinner fa-spin text-4xl text-emerald-500"></i></div>';
+
+            try {
+                const res = await fetch(`${API_BASE}/songList/userPlaylist?source=tx&uid=${uid}`);
+                const data = await res.json();
+
+                if (data.error) throw new Error(data.error);
+
+                title.innerText = `${data.nickname || uid} 的歌单`;
+                subtitle.innerText = `共发现 ${data.list.length} 个歌单`;
+
+                if (data.avatar) {
+                    avatarImg.src = data.avatar;
+                    avatarImg.classList.remove('hidden');
+                }
+
+                if (data.list.length === 0) {
+                    container.innerHTML = '<div class="text-center py-10 t-text-muted">未找到公开歌单</div>';
+                    return;
+                }
+
+                container.innerHTML = data.list.map(item => `
+                    <div class="flex items-center gap-4 p-3 rounded-xl hover:t-bg-main transition-all cursor-pointer group" 
+                         onclick="window.SongListManager.selectUserPlaylist('${item.id}')">
+                        <div class="relative flex-shrink-0">
+                            <img src="${item.img || '/music/assets/logo.svg'}" class="w-12 h-12 rounded-lg object-cover shadow-sm group-hover:scale-105 transition-transform">
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <h4 class="text-sm font-bold t-text-main truncate">${item.name}</h4>
+                            <p class="text-xs t-text-muted mt-1 uppercase tracking-tighter">
+                                ${item.total || 0} 首 · ${item.play_count || 0} 次播放 · <span class="text-emerald-500/80">tid:${item.id}</span>
+                            </p>
+                        </div>
+                        <i class="fas fa-chevron-right text-gray-300 text-xs transition-transform group-hover:translate-x-1"></i>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('[UserPlaylist] Load failed:', e);
+                container.innerHTML = `<div class="text-center py-10 text-red-500">加载失败: ${e.message}</div>`;
+                subtitle.innerText = '加载失败';
+            }
+        },
+        selectUserPlaylist: function (id) {
+            this.openDetail(id, 'tx');
+            this.closeUserPlaylistModal();
+        },
+        closeUserPlaylistModal: function () {
+            toggleUserPlaylistModal(false);
+        }
     };
 })();
 
@@ -623,6 +761,11 @@ function handleSongListSearchKeyPress(e) { if (e.key === 'Enter') window.SongLis
 function openExternalListModal() { window.SongListManager.openExternalListModal(); }
 function closeExternalListModal() { window.SongListManager.closeExternalListModal(); }
 function handleOpenExternalList() { window.SongListManager.handleOpenExternalList(); }
+function onExternalSourceChange() { window.SongListManager.onExternalSourceChange(); }
+function openQQInputModal() { window.SongListManager.openQQInputModal(); }
+function closeQQInputModal() { window.SongListManager.closeQQInputModal(); }
+function handleQQSubmit() { window.SongListManager.handleQQSubmit(); }
+function closeUserPlaylistModal() { window.SongListManager.closeUserPlaylistModal(); }
 
 function toggleSongListDesc() {
     const descEl = document.getElementById('sl-detail-desc');

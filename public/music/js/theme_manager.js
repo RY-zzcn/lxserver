@@ -36,7 +36,6 @@ function setTheme(themeName, save = true) {
     updateThemeSelectionUI(themeName);
 }
 
-// Set Appearance (Light/Dark/System)
 function setAppearance(mode, save = true) {
     const validModes = ['light', 'dark', 'system'];
     if (!validModes.includes(mode)) return;
@@ -44,8 +43,20 @@ function setAppearance(mode, save = true) {
     // Apply to Root
     if (mode === 'system') {
         document.documentElement.removeAttribute('data-appearance');
+        // Apply class based on matchMedia
+        const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (isDark) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
     } else {
         document.documentElement.setAttribute('data-appearance', mode);
+        if (mode === 'dark') {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
     }
 
     // Save Preference
@@ -124,9 +135,12 @@ function switchSettingsTab(tabName) {
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
     const currentAppearance = localStorage.getItem('lx_appearance') || 'system';
     if (currentAppearance === 'system') {
+        if (e.matches) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
         console.log(`[Theme] System color scheme changed to ${e.matches ? 'dark' : 'light'}`);
-        // No action needed as CSS media query handles it automatically,
-        // but this is a good place for JS-based adjustments if needed.
     }
 });
 

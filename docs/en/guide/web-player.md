@@ -6,10 +6,11 @@ LX Music Sync Server provides a modern Web music player at the route `/music`. I
 
 Functions currently supported by the Web player:
 
-- **Search and Sound Sources**: Supports searching across five major music platforms, and supports custom uploading JS scripts or importing URLs to extend sound sources.
+- **Search and Sound Sources**: Supports searching across five major music platforms, custom uploading JS scripts or importing URLs to extend sound sources. Now supports searching for albums, artists, and favoriting them.
 - **Playback Control**: Multi-audio quality selection (128k/320k/FLAC/Hi-Res) and automatic downgrade if audio quality fails. Supports speed adjustment (0.5x-2.0x), fade-in/fade-out, and playback progress memory.
 - **User Interaction**: Supports keyboard shortcuts, PWA, song comments, and multiple playback modes (single loop, list loop, random, etc.).
 - **Synchronization Function**: Supports reading and displaying user favorites and playlists saved on the server, and supports hot search display and batch download operations.
+- **Protocol Support**: Fully compatible with the **Subsonic** protocol, allowing you to use various Subsonic clients (e.g., Yinliu, Feishin, etc.) to connect.
 - **UI Experience**: Audio waveform display at the bottom, built-in 5 types of themes, sleep timer.
 - **Lyric Extension**: Supports displaying translation and romaji, supports Karaoke word-by-word high-light rendering, and supports sharing lyric images.
 
@@ -58,13 +59,19 @@ In addition, the Web player also supports the **Auto Proxy** function:
 - **Mixed Content Protection**: When you deploy the service under the HTTPS protocol, the browser will default to blocking media resource requests under the HTTP protocol (i.e., "mixed content" restriction) for security considerations.
 - **Intelligent Identification**: After "Auto Proxy" is enabled, if the system detects that it is currently in an HTTPS environment and the obtained sound source link is the HTTP protocol, it will automatically transfer this request to be proxied by the server side. This mode not only solves the playback compatibility problem under HTTPS, but also retains the direct connection response speed when the sound source itself supports HTTPS.
 
-### 4. Three-level Cache Playback Mechanism
+### 4. Storage and Three-level Cache Mechanism
 
-To reduce repetitive network requests and improve on-demand and progress bar dragging speeds, playback requests undergo three-level layering:
+To reduce repetitive network requests and improve playback speeds, playback requests undergo hierarchical processing involving two core physical directories:
 
-- **Level 1 (File Cache)**: If "Cache song files" is enabled in settings, the audio will be downloaded and saved in the server's `cache` physical folder during the first playback. When playing the same song for the second time, the server side directly transfers this local file to the front-end (supports 206 Partial Content break-point pulling), allowing for on-demand progress bar dragging at any time.
-- **Level 2 (Link Cache)**: The system will save music direct link URLs that were recently parsed successfully and may have time-limited Tokens in the browser's LocalStorage. If the song is triggered again before the expiration deadline, it will prioritize trying to load using this existing link.
-- **Level 3 (Re-fetch in Real-time)**: When the local server cannot find the cache and the historical link saved by the browser also fails with an error, the system will re-call the sound source script to send a request to the music platform and calculate and obtain a new playback link.
+#### Directory Differences and Usage:
+- **`/cache` Directory (Temporary Cache)**: If "Cache song files" is enabled in settings, audio will be automatically downloaded and saved here during the first playback. `/cache` is intended as a **temporary directory**; the system may automatically clean up old files based on settings (e.g., if space limits are exceeded).
+- **`/music` Directory (Persistent Library)**: This is a **persistent directory** intended for long-term storage. You can manually place external songs here via the file system or management console.
+- **Data Migration**: In the **Local Music** interface, you can choose to "move" cached files from the `/cache` directory to the `/music` directory. Once moved, the file is saved as a persistent resource and will not be automatically deleted by cache cleanup logic.
+
+#### Cache Levels:
+- **Level 1 (Physical File)**: The player first checks for matching physical files in `/music` and `/cache`. If found, the server transfers the local file to the front-end (supporting 206 Partial Content break-point pulling), allowing for lag-free progress bar dragging.
+- **Level 2 (Link Cache)**: Successfully direct link URLs are saved in the browser's LocalStorage.
+- **Level 3 (Real-time Parsing)**: When no physical file is found in local directories and the historical link has expired, the system re-fetches a new link via source scripts.
 
 ---
 

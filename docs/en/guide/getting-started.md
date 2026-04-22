@@ -31,9 +31,10 @@ For desktop users, we strongly recommend using the **Desktop Client** based on E
    - **Linux**: `.deb` (Debian/Ubuntu) and `.AppImage` formats available.
 3. **Initialization**: The first launch will guide you to select a data storage location, then the service will start in the background and be visible in the system tray.
 
-### Option 2: Containerized Deployment Based on Docker Engine 
+### Option 2: Containerized Deployment Based on Docker Engine
 
 This project supports pulling images from Docker Hub or GitHub Packages:
+
 - **Docker Hub**: `xcq0607/lxserver:latest`
 - **GitHub Packages**: `ghcr.io/xcq0607/lxserver:latest`
 
@@ -45,6 +46,7 @@ docker run -d \
   -v $(pwd)/data:/server/data \
   -v $(pwd)/logs:/server/logs \
   -v $(pwd)/cache:/server/cache \
+  -v $(pwd)/music:/server/music \
   --name lx-sync-server \
   --restart unless-stopped \
   xcq0607/lxserver:latest
@@ -55,6 +57,7 @@ docker run -d \
 - `-v $(pwd)/data:/server/data`: This configuration is a **core mandatory item**. It is responsible for exporting all application-layer state data generated within the instance to the host for persistent storage.
 - `-v $(pwd)/logs:/server/logs`: A physical mount point used to receive and output all graded audit logs of the service.
 - `-v $(pwd)/cache:/server/cache`: Used to store music cache files, significantly improving loading speed during repeated playback.
+- `-v $(pwd)/music:/server/music`: **Used exclusively for storing downloaded songs.**
 
 **Declarative Docker Compose:**
 For standardized long-term management in production implementation, create a definition configuration named `docker-compose.yml`:
@@ -72,6 +75,7 @@ services:
       - ./data:/server/data
       - ./logs:/server/logs
       - ./cache:/server/cache
+      - ./music:/server/music
     environment:
       - NODE_ENV=production
       # - FRONTEND_PASSWORD=123456
@@ -117,12 +121,12 @@ server {
 
     location / {
         proxy_pass http://127.0.0.1:9527;
-    
+  
         # Define the Header transmission policy to ensure that the Node layer can get the client's public network layer IP
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    
+  
         # Complement the long-connection upgrade feature definition (necessary condition for internal synchronization communication socket services)
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";

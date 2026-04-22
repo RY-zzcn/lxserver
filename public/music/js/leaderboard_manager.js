@@ -26,7 +26,11 @@ window.LeaderboardManager = (function () {
     function init() {
         if (initialized) return;
         initialized = true;
-        state.source = 'wy';
+
+        // 优先从缓存读取
+        const cachedSource = localStorage.getItem('lb-source-select');
+        state.source = cachedSource || 'wy';
+
         // 同步 source select 的值
         const sel = document.getElementById('lb-source-select');
         if (sel) sel.value = state.source;
@@ -202,7 +206,7 @@ window.LeaderboardManager = (function () {
             <div id="lb-row-${index}" class="${rowClass}" data-song-id="${String(song.id)}"
                  onclick="window.LeaderboardManager.handleRowClick(${index})">
                 <!-- 序号 -->
-                <div class="col-span-1 text-center flex items-center justify-center">
+                <div class="col-span-1 sm:col-span-1 text-center flex items-center justify-center">
                     ${window.batchMode ? `
                         <input type="checkbox"
                                class="batch-checkbox w-4 h-4 text-emerald-600 rounded"
@@ -212,7 +216,7 @@ window.LeaderboardManager = (function () {
                     ` : `<span class="${rankClass}">${rank}</span>`}
                 </div>
                 <!-- 封面 + 歌名 -->
-                <div class="col-span-9 md:col-span-5 lg:col-span-4 flex items-center gap-3 min-w-0">
+                <div class="col-span-9 sm:col-span-7 md:col-span-5 lg:col-span-4 flex items-center gap-3 min-w-0">
                     <div class="w-10 h-10 md:w-12 md:h-12 flex-shrink-0 relative rounded-lg overflow-hidden shadow-sm border t-border-main group-hover:shadow-md transition-all group-hover:scale-105 duration-300">
                         <img data-src="${imgUrl}" src="/music/assets/logo.svg"
                              class="lazy-image w-full h-full object-cover dynamic-logo is-placeholder"
@@ -247,7 +251,7 @@ window.LeaderboardManager = (function () {
                     ${song.interval || '--:--'}
                 </div>
                 <!-- 操作 -->
-                <div class="col-span-2 md:col-span-1 flex items-center justify-end gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                <div class="col-span-2 sm:col-span-1 md:col-span-1 flex items-center justify-end gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
                     <button class="p-1.5 hover:bg-emerald-50 rounded-lg text-emerald-600 transition-colors"
                             title="播放"
                             onclick="event.stopPropagation(); window.LeaderboardManager.playSong(${index})">
@@ -392,6 +396,10 @@ window.LeaderboardManager = (function () {
         const sel = document.getElementById('lb-source-select');
         if (!sel) return;
         state.source = sel.value;
+
+        // 保存到缓存
+        localStorage.setItem('lb-source-select', state.source);
+
         state.currentBangid = null;
         state.currentBoardName = '';
         state.songs = [];

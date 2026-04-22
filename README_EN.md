@@ -5,7 +5,7 @@
 <div align="center">
   <p>
     <img src="https://img.shields.io/badge/build-passing-brightgreen?style=flat-square" alt="Build Status">
-    <img src="https://img.shields.io/badge/version-v1.8.4-blue?style=flat-square" alt="Version">
+    <img src="https://img.shields.io/badge/version-v1.9.1-blue?style=flat-square" alt="Version">
     <img src="https://img.shields.io/badge/node-%3E%3D16-green?style=flat-square" alt="Node Version">
     <img src="https://img.shields.io/github/license/XCQ0607/lxserver?style=flat-square" alt="License">
     <br>
@@ -84,9 +84,28 @@ Choose from multiple **modern themes** (Emerald, Deep Blue, Warm Sun, Nebula, Cr
 </p>
 
 ### 8. Custom Source Management
+
 Supports importing custom source scripts to expand music sources even further.
+
 <p align="center">
   <img src="md/source.png" width="800" alt="Source Management">
+</p>
+
+### 9. Album & Artist Search & Collection
+
+Search for albums and artists and favorite them with one click for quick access to your favorite music.
+
+<p align="center">
+  <img src="md/album.png" width="400" alt="Album Display">
+  <img src="md/singer.png" width="400" alt="Artist Display">
+</p>
+
+### 10. Subsonic Protocol Support
+
+Fully compatible with the Subsonic protocol, allowing you to use various Subsonic clients (e.g., Yinliu, Feishin, etc.) to connect and play music.
+
+<p align="center">
+  <img src="md/subsonic.png" width="800" alt="Subsonic Support">
 </p>
 
 ## 🔒 Access Control & Security
@@ -98,6 +117,14 @@ To protect your privacy, the Web Player supports password protection.
    - `WEBPLAYER_PASSWORD=yourpassword`: Set access password
 2. **Web Interface**:
    Log in to the management dashboard (default port 9527), go to **"System Config"**, check **"Enable Web Player Password"** and set your password.
+
+### Custom Source Permission Matrix (when `user.enablePublicRestriction` is enabled)
+
+| User Type | View List | Use/Toggle (Personal) | Upload/Import Public | Delete/Modify Public |
+| :--- | :--- | :--- | :--- | :--- |
+| **Admin** | ✅ Allowed | ✅ Allowed | ✅ Allowed | ✅ Allowed |
+| **Logged-in** | ✅ Allowed | ✅ Allowed | ❌ Denied | ❌ Denied |
+| **Guest** | ❌ Hidden | ❌ Denied | ❌ Denied | ❌ Denied |
 
 ## 📱 Mobile Adaptation
 The Web Player is deeply optimized for mobile devices, providing a native App-like experience in mobile browsers.
@@ -135,6 +162,7 @@ docker run -d \
   -v $(pwd)/data:/server/data \
   -v $(pwd)/logs:/server/logs \
   -v $(pwd)/cache:/server/cache \
+  -v $(pwd)/music:/server/music \
   --name lx-sync-server \
   --restart unless-stopped \
   xcq0607/lxserver:latest
@@ -157,6 +185,7 @@ services:
       - ./data:/server/data
       - ./logs:/server/logs
       - ./cache:/server/cache
+      - ./music:/server/music
     environment:
       - NODE_ENV=production
       # - FRONTEND_PASSWORD=123456
@@ -231,9 +260,13 @@ Edit `config.js` directly. Environment variables take precedence:
 | `WEBPLAYER_PASSWORD` | `player.password` | Web Player password | `123456` |
 | `DISABLE_TELEMETRY` | `disableTelemetry` | Disable anonymous telemetry and update notifications | `false` |
 | `ENABLE_PUBLIC_USER_RESTRICTION` | `user.enablePublicRestriction` | Enable public user permission restriction (restrict upload/delete public sources) | `true` |
+| `ENABLE_LOGIN_USER_CACHE_RESTRICTION` | `user.enableLoginCacheRestriction` | Enable cache settings restriction for logged-in non-admin users | `false` |
+| `ENABLE_CACHE_SIZE_LIMIT` | `user.enableCacheSizeLimit` | Enable cache size limit (auto-cleanup via LRU) | `false` |
+| `CACHE_SIZE_LIMIT` | `user.cacheSizeLimit` | Cache size limit in MB | `2000` |
 | `LIST_ADD_MUSIC_LOCATION_TYPE` | `list.addMusicLocationType` | Position when adding songs to list (`top` / `bottom`) | `top` |
 | `PROXY_ALL_ENABLED` | `proxy.all.enabled` | Enable outgoing request proxy (for Music SDK) | `false` |
 | `PROXY_ALL_ADDRESS` | `proxy.all.address` | Proxy address (supports http:// or socks5://) | - |
+| `SINGER_SOURCE_PRIORITY` | `singer.sourcePriority` | Singer info retrieval priority (e.g., `tx,wy` or `wy,tx`) | `tx,wy` |
 | `LX_USER_<username>` | `users` array | Quickly add a user, value is the password (e.g., `LX_USER_test=123`) | - |
 
 > **Note**: The service currently supports two types of sync connection URLs: `Root Path` (URL configuration is `ip:port`) and `User Path` (URL configuration is `ip:port/username`). If the User Path is disabled, all sync user passwords must be completely unique.

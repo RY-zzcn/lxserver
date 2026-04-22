@@ -4,22 +4,26 @@
  */
 
 // 音质优先级定义（从高到低）
-const QUALITY_PRIORITY = ['flac24bit', 'flac', '320k', '128k'];
+const QUALITY_PRIORITY = ['master', 'flac24bit', 'flac', '320k', '192k', '128k'];
 
 // 音质显示名称
 const QUALITY_NAMES = {
+    'master': 'Master',
     'flac24bit': 'Hi-Res',
-    'flac': '无损',
-    '320k': '高品质',
+    'flac': 'SQ 无损',
+    '320k': 'HQ 高品质',
+    '192k': '标准',
     '128k': '标准'
 };
 
 // 音质颜色（用于 UI 显示）
 const QUALITY_COLORS = {
-    'flac24bit': 'bg-yellow-100 text-yellow-700 border-yellow-200',
-    'flac': 'bg-emerald-100 text-emerald-700 border-emerald-200',
-    '320k': 'bg-blue-100 text-blue-700 border-blue-200',
-    '128k': 'bg-gray-100 t-text-muted t-border-main'
+    'master': 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/40 dark:text-purple-300 dark:border-purple-700/50',
+    'flac24bit': 'bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800/50',
+    'flac': 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800/50',
+    '320k': 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800/50',
+    '192k': 'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 dark:border-indigo-800/50',
+    '128k': 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 border-gray-200 dark:border-gray-700'
 };
 
 /**

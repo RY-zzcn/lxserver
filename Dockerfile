@@ -5,11 +5,12 @@ WORKDIR /source-code
 COPY . .
 
 RUN apk add --update \
-    g++ \
-    make \
-    py3-pip \
-    nodejs \
-    npm \
+  g++ \
+  make \
+  py3-pip \
+  nodejs \
+  npm \
+  && (apk add --no-cache chromaprint || true) \
   && npm ci && npm run build \
   && rm -rf node_modules && npm ci --omit=dev \
   && mkdir build-output \
@@ -19,7 +20,8 @@ RUN apk add --update \
 FROM base AS final
 WORKDIR /server
 
-RUN apk add --update --no-cache nodejs
+RUN apk add --update --no-cache nodejs \
+  && (apk add --no-cache chromaprint || echo "chromaprint apk not found, will use bundled binary")
 
 COPY --from=builder ./source-code/build-output ./
 

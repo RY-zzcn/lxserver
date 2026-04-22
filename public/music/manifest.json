@@ -1,14 +1,14 @@
 {
     "name": "LX Music Web",
     "short_name": "LX Music",
-    "start_url": "/music/",
+    "start_url": "./",
     "display": "standalone",
     "background_color": "#ffffff",
     "theme_color": "#10b981",
     "icons": [
         {
-            "src": "/music/assets/logo.svg",
-            "sizes": "192x192 512x512",
+            "src": "./assets/logo.svg",
+            "sizes": "any",
             "type": "image/svg+xml"
         }
     ]

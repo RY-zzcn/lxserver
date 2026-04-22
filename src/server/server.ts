@@ -12,7 +12,7 @@ import {
   SYNC_CODE,
   SYNC_CLOSE_CODE,
 } from '@/constants'
-import { getUserSpace, releaseUserSpace, getUserName, getServerId, getUserDirname } from '@/user'
+import { getUserSpace, releaseUserSpace, getUserName, getServerId, getUserDirname, migrateUserData, renameUserSpace, finishRenameUserSpace } from '@/user'
 import { createMsg2call } from 'message2call'
 import { ElFinderConnector, getSystemRoot } from './elfinderConnector'
 import formidable from 'formidable'
@@ -184,7 +184,7 @@ setTimeout(() => {
  * 2. 其次验证持久化 API Token（管理面板产生，需开启账户 Token 功能）
  * 返回已验证的用户名，或 null 表示未认证。
  */
-const verifyUserAuth = (req: IncomingMessage): string | null => {
+export const verifyUserAuth = (req: IncomingMessage): string | null => {
   const token = req.headers['x-user-token'] as string
   if (token) {
     // 1. Session Token 验证
@@ -649,13 +649,37 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
 
     // 读取路径配置（每次请求都重新读取，保存后立刻生效）
     const normalizePath = (p: string) => (p || '').replace(/\/+$/, '')
-    const playerPath = global.lx.config['player.path'] || '/music'
-    const adminPath = global.lx.config['admin.path'] || ''
+    const playerPath = global.lx.config['player.path'] ?? '/music'
+    const adminPath = global.lx.config['admin.path'] ?? ''
 
     // 映射播放器逻辑 (无论是自定义路径还是前端硬编码的 /music/)
-    const isPlayerRequest = pathname.startsWith(playerPath + '/') || pathname === playerPath
+    const isPlayerRequest = playerPath === '/'
+      ? (pathname === '/' || (!pathname.startsWith('/api/') && !pathname.startsWith('/rest/') && (adminPath === '' || (pathname !== adminPath && !pathname.startsWith(adminPath + '/')))))
+      : (pathname.startsWith(playerPath + '/') || pathname === playerPath)
 
-    // 修复：只兼容旧版硬编码引用的静态资源，不再兼容打开 /music 页面本身，这样/music就无法作为网页直接打开了
+    // [新增] 映射管理后台逻辑
+    const isAdminRequest = adminPath && (pathname.startsWith(adminPath + '/') || pathname === adminPath)
+
+    if (isAdminRequest) {
+      if (pathname === adminPath) {
+        res.writeHead(301, { 'Location': pathname + '/' })
+        res.end()
+        return
+      }
+      const subPath = pathname.slice(adminPath.length)
+      let targetPath = ''
+      if (subPath === '/' || subPath === '') {
+        targetPath = 'index.html'
+      } else {
+        targetPath = subPath.startsWith('/') ? subPath.slice(1) : subPath
+      }
+      const filePath = path.join(global.lx.staticPath, targetPath)
+      if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+        serveStatic(req, res, filePath)
+        return
+      }
+    }
+
     const isLegacyPlayerAsset = playerPath !== '/music' && (
       pathname.startsWith('/music/assets/') ||
       pathname.startsWith('/music/css/') ||
@@ -691,13 +715,24 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
       // 规范化物理路径
       let targetPath = pathname
       // 将请求路径中的前缀映射到真实的 /music 物理目录
+      if (pathname === activePrefix && activePrefix !== '/') {
+        res.writeHead(301, { 'Location': pathname + '/' })
+        res.end()
+        return
+      }
+
       const subPath = pathname.slice(activePrefix.length)
-      if (subPath === '' || subPath === '/') {
-        targetPath = '/music/index.html'
+      if (subPath === '/' || subPath === '') {
+        targetPath = 'music/index.html'
       } else if (isLoginPage) {
-        targetPath = '/music/login.html'
+        targetPath = 'music/login.html'
       } else {
-        targetPath = '/music' + subPath
+        // [优化] 如果根路径是播放器，且请求已经包含 /music/ 前缀，则不再重复叠加
+        if (activePrefix === '/' && subPath.startsWith('/music/')) {
+          targetPath = subPath.slice(1)
+        } else {
+          targetPath = path.posix.join('music', subPath.startsWith('/') ? subPath.slice(1) : subPath)
+        }
       }
 
       const filePath = path.join(global.lx.staticPath, targetPath)
@@ -731,6 +766,9 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
         'user.enablePath': global.lx.config['user.enablePath'],
         'user.enableRoot': global.lx.config['user.enableRoot'],
         'user.enablePublicRestriction': global.lx.config['user.enablePublicRestriction'] || false,
+        'user.enableLoginCacheRestriction': global.lx.config['user.enableLoginCacheRestriction'] || false,
+        'user.enableCacheSizeLimit': global.lx.config['user.enableCacheSizeLimit'] || false,
+        'user.cacheSizeLimit': global.lx.config['user.cacheSizeLimit'] || 2000,
         maxSnapshotNum: global.lx.config.maxSnapshotNum,
         'list.addMusicLocationType': global.lx.config['list.addMusicLocationType'],
         'player.enableAuth': global.lx.config['player.enableAuth'] || false,
@@ -766,7 +804,7 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
       const generalFilePath = path.join(global.lx.staticPath, pathname)
       // 禁止绕过 adminPath 直接访问后台 index.html
       if (pathname === '/' || pathname === '/index.html') {
-        if (adminPath !== '') {
+        if (adminPath !== '' && playerPath !== '/') {
           res.writeHead(404)
           res.end('Not Found')
           return
@@ -940,26 +978,72 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
         if (req.method === 'PUT') {
           void readBody(req).then(body => {
             try {
-              const { name, password } = JSON.parse(body)
-              if (!name || !password) {
+              const { name, newName, password } = JSON.parse(body)
+              if (!name || (!password && !newName)) {
                 res.writeHead(400)
-                res.end('Missing name or password')
+                res.end('Missing required fields')
                 return
               }
-              const user = global.lx.config.users.find(u => u.name === name)
-              if (!user) {
+              const userIdx = global.lx.config.users.findIndex(u => u.name === name)
+              if (userIdx === -1) {
                 res.writeHead(404)
                 res.end('User not found')
                 return
               }
 
-              // 更新密码
-              user.password = password
-              saveUsers()
+              const user = global.lx.config.users[userIdx]
 
-              res.writeHead(200)
-              res.end(JSON.stringify({ success: true }))
+              const handleFinalUpdate = () => {
+                if (password) user.password = password
+                saveUsers()
+                res.writeHead(200)
+                res.end(JSON.stringify({ success: true }))
+              }
+
+              if (newName && newName !== name) {
+                if (global.lx.config.users.some(u => u.name === newName)) {
+                  res.writeHead(409)
+                  res.end('New username already exists')
+                  return
+                }
+
+                console.log(`[RenameUser] Renaming ${name} to ${newName}...`)
+
+                // 1. 断开该用户的连接
+                if (wss) {
+                  for (const client of wss.clients) {
+                    if (client.userInfo?.name === name) client.close(SYNC_CLOSE_CODE.normal)
+                  }
+                }
+
+                // 2. 释放内存中的用户空间 (清除缓存) 并锁定，防止重命名期间被重新初始化
+                renameUserSpace(name)
+
+                // 3. 稍作延迟等待 Socket 释放和可能的异步操作完成 (Windows 友好)
+                // 增加到 500ms 以确保稳定性
+                setTimeout(() => {
+                  try {
+                    // 4. 迁移物理数据
+                    migrateUserData(name, newName)
+
+                    // 5. 更新内存中的用户信息 (全局配置)
+                    user.name = newName
+
+                    handleFinalUpdate()
+                  } catch (err: any) {
+                    console.error(`[RenameUser] Failed to migrate data: ${err.message}`)
+                    res.writeHead(500)
+                    res.end(err.message || 'Data Migration Failed')
+                  } finally {
+                    // 无论成功失败，都解除锁定
+                    finishRenameUserSpace(name)
+                  }
+                }, 500)
+              } else {
+                handleFinalUpdate()
+              }
             } catch (e) {
+              console.error('[RenameUser] Error:', e)
               res.writeHead(500)
               res.end('Server Error')
             }
@@ -1579,6 +1663,77 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
         return
       }
 
+      // [新增] 用户 Library API — 收藏歌手 & 收藏专辑
+      // GET /api/user/library/artists  — 读取收藏歌手列表
+      if (pathname === '/api/user/library/artists' && req.method === 'GET') {
+        const username = verifyUserAuth(req)
+        if (!username) { res.writeHead(401); res.end('Unauthorized'); return }
+        const userDirname = getUserDirname(username)
+        const libDir = path.join(global.lx.userPath, userDirname, 'library')
+        const filePath = path.join(libDir, 'artists.json')
+        try {
+          if (!fs.existsSync(filePath)) {
+            res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('[]'); return
+          }
+          const data = fs.readFileSync(filePath, 'utf-8')
+          res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(data)
+        } catch (e: any) { res.writeHead(500); res.end(e.message) }
+        return
+      }
+
+      // POST /api/user/library/artists  — 完整覆盖写入收藏歌手列表
+      if (pathname === '/api/user/library/artists' && req.method === 'POST') {
+        const username = verifyUserAuth(req)
+        if (!username) { res.writeHead(401); res.end('Unauthorized'); return }
+        void readBody(req).then(body => {
+          try {
+            const parsed = JSON.parse(body)
+            if (!Array.isArray(parsed)) throw new Error('Expected an array')
+            const userDirname = getUserDirname(username)
+            const libDir = path.join(global.lx.userPath, userDirname, 'library')
+            if (!fs.existsSync(libDir)) fs.mkdirSync(libDir, { recursive: true })
+            fs.writeFileSync(path.join(libDir, 'artists.json'), JSON.stringify(parsed, null, 2), 'utf-8')
+            res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ success: true }))
+          } catch (e: any) { res.writeHead(400); res.end(e.message) }
+        })
+        return
+      }
+
+      // GET /api/user/library/albums  — 读取收藏专辑列表
+      if (pathname === '/api/user/library/albums' && req.method === 'GET') {
+        const username = verifyUserAuth(req)
+        if (!username) { res.writeHead(401); res.end('Unauthorized'); return }
+        const userDirname = getUserDirname(username)
+        const libDir = path.join(global.lx.userPath, userDirname, 'library')
+        const filePath = path.join(libDir, 'albums.json')
+        try {
+          if (!fs.existsSync(filePath)) {
+            res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('[]'); return
+          }
+          const data = fs.readFileSync(filePath, 'utf-8')
+          res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(data)
+        } catch (e: any) { res.writeHead(500); res.end(e.message) }
+        return
+      }
+
+      // POST /api/user/library/albums  — 完整覆盖写入收藏专辑列表
+      if (pathname === '/api/user/library/albums' && req.method === 'POST') {
+        const username = verifyUserAuth(req)
+        if (!username) { res.writeHead(401); res.end('Unauthorized'); return }
+        void readBody(req).then(body => {
+          try {
+            const parsed = JSON.parse(body)
+            if (!Array.isArray(parsed)) throw new Error('Expected an array')
+            const userDirname = getUserDirname(username)
+            const libDir = path.join(global.lx.userPath, userDirname, 'library')
+            if (!fs.existsSync(libDir)) fs.mkdirSync(libDir, { recursive: true })
+            fs.writeFileSync(path.join(libDir, 'albums.json'), JSON.stringify(parsed, null, 2), 'utf-8')
+            res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ success: true }))
+          } catch (e: any) { res.writeHead(400); res.end(e.message) }
+        })
+        return
+      }
+
       // [新增] Get User Settings (User Auth)
       if (pathname === '/api/user/settings' && req.method === 'GET') {
         const reqUsername = req.headers['x-user-name'] as string
@@ -1977,39 +2132,85 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
           }
         }
 
-        void readBody(req).then(body => {
+        void readBody(req).then(async body => {
           try {
-            const { location } = JSON.parse(body)
+            const { location, namingPattern } = JSON.parse(body)
+            let updated = false
+
             if (location) {
-              // [优化] 如果请求的位置与当前一致，直接返回成功，不触发权限拦截
-              if (location === fileCache.getCacheLocation()) {
-                res.writeHead(200, { 'Content-Type': 'application/json' })
-                res.end(JSON.stringify({ success: true }))
-                return
-              }
-
-              // 公开用户：需要管理员密码才能修改
-              if (isPublic && global.lx.config['user.enablePublicRestriction']) {
-                const auth = req.headers['x-frontend-auth']
-                if (auth !== global.lx.config['frontend.password']) {
-                  res.writeHead(403, { 'Content-Type': 'application/json' })
-                  res.end(JSON.stringify({ success: false, error: '权限不足：公共用户修改缓存位置受限，请输入管理员密码。' }))
-                  return
+              if (location !== fileCache.getCacheLocation()) {
+                // 公开用户：需要管理员密码才能修改
+                if (isPublic && global.lx.config['user.enablePublicRestriction']) {
+                  const auth = req.headers['x-frontend-auth']
+                  if (auth !== global.lx.config['frontend.password']) {
+                    res.writeHead(403, { 'Content-Type': 'application/json' })
+                    res.end(JSON.stringify({ success: false, error: '权限不足：公共用户修改缓存位置受限，请输入管理员密码。' }))
+                    return
+                  }
                 }
+                fileCache.setCacheLocation(location)
+                updated = true
               }
+            }
 
-              fileCache.setCacheLocation(location)
+            if (namingPattern) {
+              fileCache.setNamingPattern(namingPattern)
+              if (global.lx.config) global.lx.config['cache.namingPattern'] = namingPattern
+              updated = true
+            }
+
+            if (updated) {
               res.writeHead(200, { 'Content-Type': 'application/json' })
               res.end(JSON.stringify({ success: true }))
             } else {
-              res.writeHead(400)
-              res.end('Missing location')
+              res.writeHead(200, { 'Content-Type': 'application/json' })
+              res.end(JSON.stringify({ success: true, message: 'No changes' }))
             }
           } catch (e) {
             res.writeHead(500)
             res.end('Error')
           }
         })
+        return
+      }
+
+      // 1.1 Sync Cache Index
+      if (pathname === '/api/music/cache/sync' && req.method === 'POST') {
+        const verified = verifyUserAuth(req)
+        if (!verified) {
+          res.writeHead(401, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ success: false, message: 'Unauthorized' }))
+          return
+        }
+
+        try {
+          await fileCache.syncCacheIndex(verified)
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ success: true, message: 'Sync completed' }))
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ success: false, message: 'Sync failed: ' + (e as any).message }))
+        }
+        return
+      }
+
+      // 1.2 Batch Rename Cache Files
+      if (pathname === '/api/music/cache/rename' && req.method === 'POST') {
+        const verified = verifyUserAuth(req)
+        if (!verified) {
+          res.writeHead(401, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ success: false, message: 'Unauthorized' }))
+          return
+        }
+
+        try {
+          const result = await fileCache.batchRenameCacheFiles(verified)
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify(result))
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ success: false, message: 'Rename failed: ' + (e as any).message }))
+        }
         return
       }
 
@@ -2044,6 +2245,12 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
         }
 
         const result = fileCache.checkCache({ name, singer, source, songmid, songId, quality, exactQuality }, username)
+        if (result && result.exists && username !== '_open' && username !== 'default') {
+          const token = req.headers['x-user-token']
+          if (token) {
+            result.url += `&token=${encodeURIComponent(token as string)}`
+          }
+        }
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify(result))
         return
@@ -2074,7 +2281,7 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
               }
               username = verified
             }
-            const songKey = String(songInfo.id || songInfo.songmid)
+            const songKey = fileCache.normalizeSongId(songInfo) + '_' + (quality || 'unknown')
 
             console.log(`[Cache] Registering active task: ${songKey} for user: "${username}"`)
 
@@ -2155,10 +2362,29 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
       // 4. Serve Cached File
       if (pathname.startsWith('/api/music/cache/file/')) {
         const parts = pathname.replace('/api/music/cache/file/', '').split('/')
-        const username = parts.length > 1 ? decodeURIComponent(parts[0]) : '_open'
+        const reqUsername = parts.length > 1 ? decodeURIComponent(parts[0]) : '_open'
         const filename = parts.length > 1 ? parts[1] : parts[0]
 
         if (filename) {
+          let username = '_open'
+          const isPublic = !reqUsername || reqUsername === '_open' || reqUsername === 'default'
+
+          if (!isPublic) {
+            const urlToken = urlObj.searchParams.get('token')
+            if (urlToken && !req.headers['x-user-token']) {
+              (req.headers as any)['x-user-token'] = urlToken
+            }
+            if (reqUsername && !req.headers['x-user-name']) {
+              (req.headers as any)['x-user-name'] = reqUsername
+            }
+            const verified = verifyUserAuth(req)
+            if (!verified) {
+              res.writeHead(401)
+              res.end('Unauthorized')
+              return
+            }
+            username = verified
+          }
           fileCache.serveCacheFile(req, res, decodeURIComponent(filename), username)
           return
         }
@@ -2356,6 +2582,180 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
         return
       }
 
+      // [New] Batch Move Files between folders
+      if (pathname === '/api/music/cache/move' && req.method === 'POST') {
+        const reqUsername = (req.headers['x-user-name'] as string) || ''
+        const isPublic = !reqUsername || reqUsername === 'default'
+        let username = '_open'
+
+        if (!isPublic) {
+          const verified = verifyUserAuth(req)
+          if (!verified) {
+            res.writeHead(401)
+            res.end(JSON.stringify({ success: false, message: 'Unauthorized' }))
+            return
+          }
+          username = verified
+        }
+
+        void readBody(req).then(async body => {
+          try {
+            const { filenames } = JSON.parse(body)
+            if (!filenames) throw new Error('Missing filenames')
+            const fileList = Array.isArray(filenames) ? filenames : [filenames]
+
+            const result = await fileCache.switchFolder(fileList, username)
+
+            res.writeHead(200, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ success: true, ...result }))
+          } catch (e: any) {
+            res.writeHead(400)
+            res.end(e.message)
+          }
+        })
+        return
+      }
+
+      // [New] WebDAV/Base Location switch
+      if (pathname === '/api/music/cache/switch-base' && req.method === 'POST') {
+        const reqUsername = (req.headers['x-user-name'] as string) || ''
+        const isPublic = !reqUsername || reqUsername === 'default'
+        let username = '_open'
+
+        if (!isPublic) {
+          const verified = verifyUserAuth(req)
+          if (!verified) {
+            res.writeHead(401)
+            res.end(JSON.stringify({ success: false, message: 'Unauthorized' }))
+            return
+          }
+          username = verified
+        }
+
+        void readBody(req).then(async body => {
+          try {
+            const { filenames } = JSON.parse(body)
+            if (!filenames) throw new Error('Missing filenames')
+            const fileList = Array.isArray(filenames) ? filenames : [filenames]
+
+            const result = await fileCache.switchBaseLocation(fileList, username)
+
+            res.writeHead(200, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ success: true, ...result }))
+          } catch (e: any) {
+            res.writeHead(400)
+            res.end(e.message)
+          }
+        })
+        return
+      }
+
+
+
+      // 10. Update Metadata (Batch)
+      if (pathname === '/api/music/cache/updateMetadata' && req.method === 'POST') {
+        const reqUsername = (req.headers['x-user-name'] as string) || ''
+        const isPublic = !reqUsername || reqUsername === 'default'
+        let username = '_open'
+
+        if (!isPublic) {
+          const verified = verifyUserAuth(req)
+          if (!verified) {
+            res.writeHead(401, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ success: false, message: 'Unauthorized' }))
+            return
+          }
+          username = verified
+        }
+        void readBody(req).then(async body => {
+          try {
+            const { filenames } = JSON.parse(body)
+            if (!filenames) throw new Error('Missing filenames')
+
+            const fileList = Array.isArray(filenames) ? filenames : [filenames]
+            const result = await fileCache.batchUpdateMetadata(fileList, username)
+
+            res.writeHead(200, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ success: true, ...result }))
+          } catch (e: any) {
+            res.writeHead(400)
+            res.end(e.message)
+          }
+        })
+        return
+      }
+
+      // 11. Link Unindexed Local File
+      if (pathname === '/api/music/cache/link' && req.method === 'POST') {
+        const verified = verifyUserAuth(req)
+        if (!verified) {
+          res.writeHead(401, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ success: false, message: 'Unauthorized' }))
+          return
+        }
+
+        void readBody(req).then(async body => {
+          try {
+            const { filename, songInfo } = JSON.parse(body)
+            if (!filename || !songInfo) {
+              res.writeHead(400)
+              res.end('Missing params')
+              return
+            }
+
+            const result = await fileCache.linkLocalFile(filename, songInfo, verified)
+            res.writeHead(200, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify(result))
+          } catch (e: any) {
+            res.writeHead(500, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ success: false, message: e.message || 'Linking failed' }))
+          }
+        })
+        return
+      }
+
+      // 12. Identify Local File (AcoustID)
+      if (pathname === '/api/music/identify' && req.method === 'POST') {
+        const verified = verifyUserAuth(req)
+        if (!verified) {
+          res.writeHead(401, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ success: false, message: 'Unauthorized' }))
+          return
+        }
+
+        void readBody(req).then(async body => {
+          try {
+            const { filename, folder } = JSON.parse(body)
+            if (!filename) {
+              res.writeHead(400)
+              res.end('Missing filename')
+              return
+            }
+
+            const { identifyLocalSong } = require('./utils/identify')
+            const username = verified
+
+            // Get absolute path - folder can be 'cache' or 'music'
+            const musicDir = fileCache.getCacheDir(username, folder === 'music')
+            const filePath = path.join(musicDir, filename)
+
+            if (!fs.existsSync(filePath)) {
+              throw new Error('文件不存在: ' + filename)
+            }
+
+            const results = await identifyLocalSong(filePath)
+            res.writeHead(200, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ success: true, results }))
+          } catch (e: any) {
+            console.error('[Identify] Error:', e.message)
+            res.writeHead(500, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ success: false, message: e.message || 'Identification failed' }))
+          }
+        })
+        return
+      }
+
+
 
       // [New] Fetch Lyrics
       if (pathname === '/api/music/lyric' && req.method === 'GET') {
@@ -2456,7 +2856,7 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
       if (pathname === '/api/music/cache/lyric' && req.method === 'POST') {
         void readBody(req).then(body => {
           try {
-            const { songInfo, lyricsObj } = JSON.parse(body)
+            const { songInfo, lyricsObj, enableOnlyDownloadMode } = JSON.parse(body)
             const reqUsername = (req.headers['x-user-name'] as string) || ''
             const isPublic = !reqUsername || reqUsername === 'default'
             let username = '_open'
@@ -2477,7 +2877,7 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
               return
             }
 
-            const success = fileCache.saveLyricCache(songInfo, lyricsObj, username)
+            const success = fileCache.saveLyricCache(songInfo, lyricsObj, username, !!enableOnlyDownloadMode)
             res.writeHead(200, { 'Content-Type': 'application/json' })
             res.end(JSON.stringify({ success }))
           } catch (e: any) {
@@ -2984,6 +3384,7 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
         const name = urlObj.searchParams.get('name') || ''
         const singer = urlObj.searchParams.get('singer') || ''
         const source = urlObj.searchParams.get('source') || 'kw'
+        const type = urlObj.searchParams.get('type') || 'song' // 新增 type 参数: song, singer, album, playlist
         const limit = parseInt(urlObj.searchParams.get('limit') || '20')
         const page = parseInt(urlObj.searchParams.get('page') || '1')
 
@@ -2995,12 +3396,45 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
           if (!musicSdk[source]) {
             throw new Error(`Source ${source} is not supported`)
           }
-          const searchData = await musicSdk[source].musicSearch.search(name, page, limit)
-          const list = searchData.list || []
 
-          fs.appendFileSync(path.join(process.cwd(), 'debug.txt'), `[Search] Source: ${source}, Query: ${name}, Result Count: ${list.length}\n`)
+          let result
+          if (type === 'song') {
+            const MAX_PAGES = 10  // 最多拉取 10 页 = 200 首
+            const PAGE_SIZE = 20
+            let allSongs: any[] = []
+            for (let p = 1; p <= MAX_PAGES; p++) {
+              const searchData = await musicSdk[source].musicSearch.search(name, p, PAGE_SIZE)
+              const pageList: any[] = searchData.list || []
+              allSongs = allSongs.concat(pageList)
+              // 如果本页返回数量小于 PAGE_SIZE，说明已经是最后一页
+              if (pageList.length < PAGE_SIZE) break
+            }
+            result = allSongs
+          } else if (type === 'singer') {
+            if (!musicSdk[source].extendSearch || !musicSdk[source].extendSearch.searchSinger) {
+              throw new Error(`Source ${source} does not support singer search`)
+            }
+            const searchData = await musicSdk[source].extendSearch.searchSinger(name, page, limit)
+            result = searchData.list || []
+          } else if (type === 'album') {
+            if (!musicSdk[source].extendSearch || !musicSdk[source].extendSearch.searchAlbum) {
+              throw new Error(`Source ${source} does not support album search`)
+            }
+            const searchData = await musicSdk[source].extendSearch.searchAlbum(name, page, limit)
+            result = searchData.list || []
+          } else if (type === 'playlist') {
+            if (!musicSdk[source].extendSearch || !musicSdk[source].extendSearch.searchPlaylist) {
+              throw new Error(`Source ${source} does not support playlist search`)
+            }
+            const searchData = await musicSdk[source].extendSearch.searchPlaylist(name, page, limit)
+            result = searchData.list || []
+          } else {
+            throw new Error(`Invalid search type: ${type}`)
+          }
+
+          fs.appendFileSync(path.join(process.cwd(), 'debug.txt'), `[Search] Source: ${source}, Type: ${type}, Query: ${name}, Result Count: ${result.length}\n`)
           res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify(list))
+          res.end(JSON.stringify(result))
         } catch (err: any) {
           fs.appendFileSync(path.join(process.cwd(), 'debug.txt'), `[Search Error] ${err.message}\n${err.stack}\n`)
           console.error(err)
@@ -3031,6 +3465,85 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
         return
       }
 
+      // [新增] 获取歌手详情 API
+      if (pathname === '/api/music/artistDetail' && req.method === 'GET') {
+        const id = urlObj.searchParams.get('id')
+        const source = urlObj.searchParams.get('source') || 'wy'
+        if (!id) {
+          res.writeHead(400); res.end('Missing id'); return
+        }
+        try {
+          const data = await musicSdk[source].extendDetail.getArtistDetail(id)
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify(data))
+        } catch (err: any) {
+          res.writeHead(500); res.end(err.message)
+        }
+        return
+      }
+
+      // [新增] 获取歌手专辑列表 API
+      if (pathname === '/api/music/artistAlbums' && req.method === 'GET') {
+        const id = urlObj.searchParams.get('id')
+        const source = urlObj.searchParams.get('source') || 'wy'
+        const page = parseInt(urlObj.searchParams.get('page') || '1')
+        if (!id) {
+          res.writeHead(400); res.end('Missing id'); return
+        }
+        try {
+          const data = await musicSdk[source].extendDetail.getArtistAlbums(id, page)
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify(data))
+        } catch (err: any) {
+          res.writeHead(500); res.end(err.message)
+        }
+        return
+      }
+
+      // [新增] 获取歌手歌曲 API（循环拉取全部，前端分页）
+      if (pathname === '/api/music/artistSongs' && req.method === 'GET') {
+        const id = urlObj.searchParams.get('id')
+        const source = urlObj.searchParams.get('source') || 'wy'
+        const order = urlObj.searchParams.get('order') || 'hot'
+        if (!id) {
+          res.writeHead(400); res.end('Missing id'); return
+        }
+        try {
+          const MAX_PAGES = 5  // 最多拉取 5 页 = 500 首
+          const PAGE_SIZE = 100
+          let allSongs: any[] = []
+          for (let p = 1; p <= MAX_PAGES; p++) {
+            const data = await musicSdk[source].extendDetail.getArtistSongs(id, p, PAGE_SIZE, order)
+            const pageList: any[] = data.list || []
+            allSongs = allSongs.concat(pageList)
+            // 如果本页返回数量小于 PAGE_SIZE，说明已经是最后一页
+            if (pageList.length < PAGE_SIZE) break
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify(allSongs))
+        } catch (err: any) {
+          res.writeHead(500); res.end(err.message)
+        }
+        return
+      }
+
+      // [新增] 获取专辑歌曲 API
+      if (pathname === '/api/music/albumSongs' && req.method === 'GET') {
+        const id = urlObj.searchParams.get('id')
+        const source = urlObj.searchParams.get('source') || 'wy'
+        if (!id) {
+          res.writeHead(400); res.end('Missing id'); return
+        }
+        try {
+          const data = await musicSdk[source].extendDetail.getAlbumSongs(id)
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify(data))
+        } catch (err: any) {
+          res.writeHead(500); res.end(err.message)
+        }
+        return
+      }
+
       // [新增] 音乐解析进度 SSE 端点 (无需登录, 用 requestId 区分)
       if (pathname === '/api/music/progress' && req.method === 'GET') {
         const reqId = urlObj.searchParams.get('reqId')
@@ -3041,9 +3554,10 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
         }
         res.writeHead(200, {
           'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
+          'Cache-Control': 'no-cache, no-transform',
           'Connection': 'keep-alive',
           'Access-Control-Allow-Origin': '*',
+          'X-Accel-Buffering': 'no', // 关键：禁用 Nginx 等代理的缓冲
         })
         res.write('retry: 3000\n\n')
         musicProgressClients.set(reqId, res)
@@ -3074,15 +3588,18 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
 
         void readBody(req).then(async body => {
           // 辅助：通过 SSE 推送进度（内置竞态重试，最多等 600ms 让 SSE 连接就绪）
-          const pushProgress = async (attempt: any, retries = 3): Promise<void> => {
-            if (reqId && musicProgressClients.has(reqId)) {
+          let sseFailed = false
+          const pushProgress = async (attempt: any, retries = 10): Promise<void> => {
+            if (!reqId || sseFailed) return
+            if (musicProgressClients.has(reqId)) {
               musicProgressClients.get(reqId)!.write(`data: ${JSON.stringify(attempt)}\n\n`)
               return
             }
             if (retries > 0) {
-              await new Promise(r => setTimeout(r, 200))
+              await new Promise(r => setTimeout(r, 300))
               await pushProgress(attempt, retries - 1)
-            } else if (reqId) {
+            } else {
+              sseFailed = true
               console.warn(`[SSE] ReqId ${reqId} not found after retries (${musicProgressClients.size} clients registered)`)
             }
           }
@@ -3105,7 +3622,7 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
 
                 const userApiResult = await callUserApiGetMusicUrl(
                   source, songInfo, quality || '128k', verifiedUsername,
-                  (attempt) => pushProgress(attempt)
+                  (attempt) => { void pushProgress(attempt) }
                 )
                 result = userApiResult
                 attempts = userApiResult.attempts || []
@@ -3117,7 +3634,7 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
               }
             } else {
               // isSourceSupported = false: 无任何自定义源支持此平台，立即通知前端
-              await pushProgress({ name: '系统', status: 'fail', message: `未找到支持 ${source} 平台的自定义源，请在设置中添加或启用相关源` })
+              void pushProgress({ name: '系统', status: 'fail', message: `未找到支持 ${source} 平台的自定义源，请在设置中添加或启用相关源` })
             }
 
             // 自定义源失败则直接报错（内置 SDK 无独立解析能力，回退无意义）
@@ -3344,6 +3861,31 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
         return
       }
 
+      // [新增] 获取用户歌单 API
+      if (pathname === '/api/music/songList/userPlaylist' && req.method === 'GET') {
+        const source = urlObj.searchParams.get('source') || 'tx'
+        const uid = urlObj.searchParams.get('uid')
+        const page = parseInt(urlObj.searchParams.get('page') || '1')
+        if (!uid) {
+          res.writeHead(400)
+          res.end('Missing uid')
+          return
+        }
+        try {
+          if (!musicSdk[source] || !musicSdk[source].userPlaylist) {
+            throw new Error(`Source ${source} does not support userPlaylist`)
+          }
+          const result = await musicSdk[source].userPlaylist.getList(uid, page)
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify(result))
+        } catch (err: any) {
+          console.error(`[User Playlist] Error:`, err)
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: err.message || '获取用户歌单失败' }))
+        }
+        return
+      }
+
       // [新增] 排行榜 - 获取榜单列表 API
       if (pathname === '/api/music/leaderboard/boards' && req.method === 'GET') {
         const source = urlObj.searchParams.get('source') || 'kg'
@@ -3436,9 +3978,37 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
       // 注：此处不再进行全局强制鉴权，鉴权逻辑已下放到 customSourceHandlers 中，
       // 以便根据请求体中的 username 字段判断是否需要校验管理员密码。
 
+      // [新增] 管理员身份验证接口
+      if (pathname === '/api/admin/verify' && req.method === 'POST') {
+        const auth = req.headers['x-frontend-auth']
+        if (auth === global.lx.config['frontend.password']) {
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ success: true }))
+        } else {
+          res.writeHead(401, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ success: false, error: '管理员密码验证失败' }))
+        }
+        return
+      }
+
       if (pathname === '/api/custom-source/validate' && req.method === 'POST') {
         return customSourceHandlers.handleValidate(req, res)
       }
+
+      // 所有自定义源修改接口通用鉴权 (如果是公开访问限制模式，则必须登录)
+      if (pathname.startsWith('/api/custom-source/') && req.method === 'POST' && pathname !== '/api/custom-source/validate') {
+        if (global.lx.config['user.enablePublicRestriction']) {
+          const auth = req.headers['x-frontend-auth']
+          const isAdmin = auth === global.lx.config['frontend.password']
+          const user = verifyUserAuth(req)
+          if (!isAdmin && !user) {
+            res.writeHead(403, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ success: false, error: '当前系统已开启访问限制，管理操作请登录后重试。' }))
+            return
+          }
+        }
+      }
+
       if (pathname === '/api/custom-source/import' && req.method === 'POST') {
         return customSourceHandlers.handleImport(req, res)
       }
@@ -3447,6 +4017,19 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
       }
       if (pathname === '/api/custom-source/list' && req.method === 'GET') {
         const username = urlObj.searchParams.get('username') || 'default'
+
+        // 鉴权逻辑：如果开启了页面公开访问限制
+        if (global.lx.config['user.enablePublicRestriction']) {
+          const auth = req.headers['x-frontend-auth']
+          const isAdmin = auth === global.lx.config['frontend.password']
+          const user = verifyUserAuth(req)
+          if (!isAdmin && !user) {
+            res.writeHead(403, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ success: false, error: '当前系统已开启公开访问限制，请登录后重试。' }))
+            return
+          }
+        }
+
         return customSourceHandlers.handleList(req, res, username)
       }
       if (pathname === '/api/custom-source/toggle' && req.method === 'POST') {
@@ -3639,6 +4222,9 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
             'user.enablePath': global.lx.config['user.enablePath'],
             'user.enableRoot': global.lx.config['user.enableRoot'],
             'user.enablePublicRestriction': global.lx.config['user.enablePublicRestriction'],
+            'user.enableLoginCacheRestriction': global.lx.config['user.enableLoginCacheRestriction'],
+            'user.enableCacheSizeLimit': global.lx.config['user.enableCacheSizeLimit'],
+            'user.cacheSizeLimit': global.lx.config['user.cacheSizeLimit'],
             'frontend.password': global.lx.config['frontend.password'],
             'player.enableAuth': global.lx.config['player.enableAuth'] || false,
             'player.password': global.lx.config['player.password'] || '',
@@ -3652,6 +4238,7 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
             'player.path': global.lx.config['player.path'] ?? '/music',
             'subsonic.enable': global.lx.config['subsonic.enable'] ?? true,
             'subsonic.path': global.lx.config['subsonic.path'] ?? '/rest',
+            'singer.sourcePriority': (global.lx.config['singer.sourcePriority'] || ['tx', 'wy']).join(','),
           }
           res.writeHead(200, {
             'Content-Type': 'application/json',
@@ -3674,6 +4261,9 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
               // 新增：处理 user.enableRoot
               if (newConfig['user.enableRoot'] !== undefined) global.lx.config['user.enableRoot'] = newConfig['user.enableRoot']
               if (newConfig['user.enablePublicRestriction'] !== undefined) global.lx.config['user.enablePublicRestriction'] = newConfig['user.enablePublicRestriction']
+              if (newConfig['user.enableLoginCacheRestriction'] !== undefined) global.lx.config['user.enableLoginCacheRestriction'] = newConfig['user.enableLoginCacheRestriction']
+              if (newConfig['user.enableCacheSizeLimit'] !== undefined) global.lx.config['user.enableCacheSizeLimit'] = newConfig['user.enableCacheSizeLimit']
+              if (newConfig['user.cacheSizeLimit'] !== undefined) global.lx.config['user.cacheSizeLimit'] = parseInt(newConfig['user.cacheSizeLimit']) || 2000
 
               let warning = ''
 
@@ -3706,14 +4296,13 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
               if (newConfig['proxy.all.enabled'] !== undefined) global.lx.config['proxy.all.enabled'] = newConfig['proxy.all.enabled']
               if (newConfig['proxy.all.address'] !== undefined) global.lx.config['proxy.all.address'] = newConfig['proxy.all.address']
 
-              // URL路径配置校验与更新
               if (newConfig['admin.path'] !== undefined || newConfig['player.path'] !== undefined) {
-                const adminPath = (newConfig['admin.path'] !== undefined ? newConfig['admin.path'] : global.lx.config['admin.path']) || ''
-                const playerPath = (newConfig['player.path'] !== undefined ? newConfig['player.path'] : global.lx.config['player.path']) || '/music'
+                const adminPath = (newConfig['admin.path'] !== undefined ? newConfig['admin.path'] : (global.lx.config['admin.path'] ?? ''))
+                const playerPath = (newConfig['player.path'] !== undefined ? newConfig['player.path'] : (global.lx.config['player.path'] ?? '/music'))
                 const normalizedAdmin = adminPath.replace(/\/+$/, '')
                 const normalizedPlayer = playerPath.replace(/\/+$/, '')
 
-                if (!normalizedPlayer || !normalizedPlayer.startsWith('/')) {
+                if (!playerPath || !playerPath.startsWith('/')) {
                   res.writeHead(422, { 'Content-Type': 'application/json' })
                   res.end(JSON.stringify({ success: false, error: '播放器路径不能为空且必须以 / 开头' }))
                   return
@@ -3723,7 +4312,7 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
                   res.end(JSON.stringify({ success: false, error: '后台路径必须以 / 开头或为空' }))
                   return
                 }
-                if ((normalizedAdmin || '/') === normalizedPlayer) {
+                if ((normalizedAdmin || '/') === (normalizedPlayer || '/')) {
                   res.writeHead(422, { 'Content-Type': 'application/json' })
                   res.end(JSON.stringify({ success: false, error: '后台管理路径与播放器路径不能相同' }))
                   return
@@ -3741,6 +4330,10 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
               if (newConfig['subsonic.enable'] !== undefined) global.lx.config['subsonic.enable'] = newConfig['subsonic.enable']
               if (newConfig['subsonic.path'] !== undefined) {
                 global.lx.config['subsonic.path'] = newConfig['subsonic.path'].replace(/\/+$/, '') || '/rest'
+              }
+              if (newConfig['singer.sourcePriority'] !== undefined) {
+                const priority = String(newConfig['singer.sourcePriority']).split(',').filter(s => s === 'tx' || s === 'wy') as Array<'tx' | 'wy'>
+                if (priority.length > 0) global.lx.config['singer.sourcePriority'] = priority
               }
 
               // 更新 WebDAVSync 配置
@@ -4689,6 +5282,19 @@ const handleStartServer = async (port = 9527, ip = '127.0.0.1') => await new Pro
 // }
 
 export const startServer = async (port: number, ip: string) => {
+  // Initialize file cache settings from global config
+  if (global.lx.config) {
+    if (global.lx.config.serverCacheLocation) fileCache.setCacheLocation(global.lx.config.serverCacheLocation)
+    if (global.lx.config['cache.namingPattern']) fileCache.setNamingPattern(global.lx.config['cache.namingPattern'])
+
+    // Background sync cache index for active users
+    if (global.lx.config.users) {
+      for (const user of global.lx.config.users) {
+        void fileCache.syncCacheIndex(user.name)
+      }
+    }
+  }
+
   // if (status.status) await handleStopServer()
 
   startupLog.info(`starting sync server in ${process.env.NODE_ENV == 'production' ? 'production' : 'development'}`)

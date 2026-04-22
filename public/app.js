@@ -17,11 +17,22 @@
 
 const API_BASE = '';
 
+function stringToColor(str) {
+    if (!str) return 'var(--accent-primary)';
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const h = Math.abs(hash) % 360;
+    return `hsl(${h}, 70%, 45%)`;
+}
+
 class App {
     constructor() {
         this.password = null;
         this.currentView = 'dashboard';
         this.users = [];
+        this.configLoaded = false;
         this.systemCpuHistory = [];
         this.processCpuHistory = [];
         this.systemMemHistory = [];
@@ -37,6 +48,7 @@ class App {
         if (savedPassword) {
             this.password = savedPassword;
             this.showApp();
+            this.loadConfig(); // [新增] 初始化时加载配置，确保 configLoaded 标志位正确且持有环境变量数据
             this.loadDashboard();
         }
 
@@ -52,8 +64,9 @@ class App {
         // 绑定导航
         document.querySelectorAll('.nav-item').forEach(item => {
             item.addEventListener('click', (e) => {
-                e.preventDefault();
                 const view = item.dataset.view;
+                if (view === 'music') return; // 播放器链接直接跳转，不拦截
+                e.preventDefault();
                 this.switchView(view);
             });
         });
@@ -70,6 +83,8 @@ class App {
         document.getElementById('add-user-btn')?.addEventListener('click', () => this.showAddUserModal());
         document.getElementById('refresh-users-btn')?.addEventListener('click', async () => {
             try {
+                // 在重载前先保存配置
+                await this.saveConfig(true);
                 await this.request('/api/admin/reload', { method: 'POST' });
                 this.loadUsers();
                 this.loadDashboard();
@@ -82,12 +97,15 @@ class App {
         document.getElementById('batch-delete-users-btn')?.addEventListener('click', () => this.batchDeleteUsers());
         document.getElementById('select-all-users')?.addEventListener('change', (e) => this.toggleAllUsers(e.target.checked));
 
-        // 新增：密码修改模态框事件
+        // 新增：用户名、密码修改模态框事件
         document.getElementById('save-password-btn')?.addEventListener('click', () => this.saveNewPassword());
+        document.getElementById('save-rename-user-btn')?.addEventListener('click', () => this.saveRenameUser());
+
         // 绑定所有模态框关闭按钮
         document.querySelectorAll('.modal-close').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.getElementById('edit-password-modal')?.classList.add('hidden');
+                document.getElementById('rename-user-modal')?.classList.add('hidden');
                 document.getElementById('modal')?.classList.add('hidden');
             });
         });
@@ -105,7 +123,10 @@ class App {
             e.preventDefault();
             this.saveConfig();
         });
-        document.getElementById('reload-config-btn')?.addEventListener('click', () => this.loadConfig());
+        document.getElementById('reload-config-btn')?.addEventListener('click', async () => {
+            await this.saveConfig(true);
+            this.loadConfig();
+        });
 
         // 日志查看
         document.getElementById('refresh-logs-btn')?.addEventListener('click', () => this.loadLogs());
@@ -288,8 +309,8 @@ class App {
                 this.loadAbout();
                 break;
             case 'files':
-                // 跳转到新的 elFinder 文件管理器
-                window.location.href = '/filemanager.html';
+                // 跳转到新的 elFinder 文件管理器 (相对路径)
+                window.location.href = 'filemanager.html';
                 return;
             case 'music':
                 window.location.href = (window.CONFIG && window.CONFIG['player.path']) || '/music';
@@ -772,10 +793,16 @@ class App {
                     <input type="checkbox" class="user-checkbox" data-index="${index}" onchange="app.updateUserBatchBtn()">
                 </div>
                 <div class="col-name">
-                    <div class="user-avatar">
-                        <span>${user.name.charAt(0).toUpperCase()}</span>
+                    <div class="user-avatar" style="background-color: ${stringToColor(user.name)}">
+                        <span>${this.escapeHtml(user.name.charAt(0).toUpperCase())}</span>
                     </div>
-                    <span>${this.escapeHtml(user.name)}</span>
+                    <span class="user-name-text">${this.escapeHtml(user.name)}</span>
+                    <button class="btn-icon" onclick="app.showRenameUserModal(${index})" title="重命名用户" style="margin-left: 8px;">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                    </button>
                 </div>
                 <div class="col-password">
                     <span class="password-text" id="pwd-text-${index}">******</span>
@@ -978,6 +1005,46 @@ class App {
                 resolve(null);
             });
         });
+    }
+
+    // 显示修改用户名模态框
+    showRenameUserModal(index) {
+        const user = this.users[index];
+        if (!user) return;
+
+        this.editingUser = user.name;
+        document.getElementById('rename-user-input').value = user.name;
+        document.getElementById('rename-user-modal').classList.remove('hidden');
+    }
+
+    // 保存新用户名
+    async saveRenameUser() {
+        const newName = document.getElementById('rename-user-input').value.trim();
+        if (!newName) {
+            showInfo('请填写新用户名');
+            return;
+        }
+        if (newName === this.editingUser) {
+            document.getElementById('rename-user-modal').classList.add('hidden');
+            return;
+        }
+
+        try {
+            await this.request('/api/users', {
+                method: 'PUT',
+                body: JSON.stringify({
+                    name: this.editingUser,
+                    newName: newName
+                })
+            });
+
+            document.getElementById('rename-user-modal').classList.add('hidden');
+            this.loadUsers();
+            this.loadDashboard();
+            showSuccess('用户名修改成功, 请重新在客户端连接');
+        } catch (err) {
+            showError('修改失败: ' + err.message);
+        }
     }
 
     currentUserData = null;
@@ -1605,6 +1672,7 @@ class App {
     async loadConfig() {
         try {
             const config = await this.request('/api/config');
+            this.configLoaded = true;
             const form = document.getElementById('config-form');
 
             form.elements['serverName'].value = config.serverName || '';
@@ -1626,6 +1694,18 @@ class App {
             }
             if (form.elements['user.enablePublicRestriction']) {
                 form.elements['user.enablePublicRestriction'].checked = config['user.enablePublicRestriction'] === true;
+            }
+            if (form.elements['user.enableLoginCacheRestriction']) {
+                form.elements['user.enableLoginCacheRestriction'].checked = config['user.enableLoginCacheRestriction'] === true;
+            }
+            if (form.elements['user.enableCacheSizeLimit']) {
+                form.elements['user.enableCacheSizeLimit'].checked = config['user.enableCacheSizeLimit'] === true;
+            }
+            if (form.elements['user.cacheSizeLimit']) {
+                form.elements['user.cacheSizeLimit'].value = config['user.cacheSizeLimit'] || 2000;
+            }
+            if (form.elements['singer.sourcePriority']) {
+                form.elements['singer.sourcePriority'].value = config['singer.sourcePriority'] || 'tx,wy';
             }
             form.elements['frontend.password'].value = config['frontend.password'] || '';
 
@@ -1656,14 +1736,28 @@ class App {
                 form.elements['admin.path'].value = config['admin.path'] ?? '';
             }
             if (form.elements['player.path']) {
-                form.elements['player.path'].value = config['player.path'] ?? '/music';
+                const pPath = config['player.path'] ?? '/music';
+                form.elements['player.path'].value = pPath === '' ? '/' : pPath;
+            }
+
+            // [新增] 同时更新侧边栏链接
+            const navPlayerLink = document.getElementById('nav-player-link');
+            if (navPlayerLink) navPlayerLink.href = (config['player.path'] === '' ? '/' : (config['player.path'] ?? '/music'));
+
+            // Subsonic 配置
+            if (form.elements['subsonic.enable']) {
+                form.elements['subsonic.enable'].checked = config['subsonic.enable'] === true;
+            }
+            if (form.elements['subsonic.path']) {
+                form.elements['subsonic.path'].value = config['subsonic.path'] || '/rest';
             }
         } catch (err) {
             console.error('Failed to load config:', err);
         }
     }
 
-    async saveConfig() {
+    async saveConfig(silent = false) {
+        if (!this.configLoaded) return;
         const form = document.getElementById('config-form');
         const formData = new FormData(form);
 
@@ -1679,7 +1773,7 @@ class App {
             pathError = '⚠️ 播放器路径必须以 / 开头';
         } else if (adminPath !== '' && !adminPath.startsWith('/')) {
             pathError = '⚠️ 后台路径必须以 / 开头（或留空表示根路径）';
-        } else if ((adminPath || '/') === playerPath) {
+        } else if ((adminPath || '/') === (playerPath === '/' ? '/' : playerPath.replace(/\/+$/, ''))) {
             pathError = '⚠️ 后台管理路径与播放器路径不能相同';
         } else if (adminPath.startsWith('/api') || playerPath.startsWith('/api')) {
             pathError = '⚠️ 路径不能以 /api 开头（与 API 路由冲突）';
@@ -1702,6 +1796,9 @@ class App {
             'user.enablePath': formData.get('user.enablePath') === 'on',
             'user.enableRoot': formData.get('user.enableRoot') === 'on',
             'user.enablePublicRestriction': formData.get('user.enablePublicRestriction') === 'on',
+            'user.enableLoginCacheRestriction': formData.get('user.enableLoginCacheRestriction') === 'on',
+            'user.enableCacheSizeLimit': formData.get('user.enableCacheSizeLimit') === 'on',
+            'user.cacheSizeLimit': parseInt(formData.get('user.cacheSizeLimit')) || 2000,
             'frontend.password': formData.get('frontend.password'),
             'player.enableAuth': formData.get('player.enableAuth') === 'on',
             'player.password': formData.get('player.password'),
@@ -1711,6 +1808,9 @@ class App {
             'sync.interval': parseInt(formData.get('sync.interval')) || 60,
             'admin.path': adminPath,
             'player.path': playerPath,
+            'subsonic.enable': formData.get('subsonic.enable') === 'on',
+            'subsonic.path': (formData.get('subsonic.path') || '').trim() || '/rest',
+            'singer.sourcePriority': formData.get('singer.sourcePriority'),
         };
 
         try {
@@ -1727,15 +1827,18 @@ class App {
 
             // 更新侧边栏播放器链接
             const navPlayerLink = document.getElementById('nav-player-link');
-            if (navPlayerLink) navPlayerLink.href = playerPath || '/music';
+            if (navPlayerLink) navPlayerLink.href = playerPath === '' ? '/' : (playerPath ?? '/music');
 
-            if (res.warning) {
-                showInfo('配置保存成功！\n\n⚠️ 警告：' + res.warning);
-            } else {
-                showSuccess('配置保存成功！');
+            if (!silent) {
+                if (res.warning) {
+                    showInfo('配置保存成功！\n\n⚠️ 警告：' + res.warning);
+                } else {
+                    showSuccess('配置保存成功！');
+                }
             }
         } catch (err) {
-            showError('配置保存失败: ' + err.message);
+            if (!silent) showError('配置保存失败: ' + err.message);
+            throw err;
         }
     }
 

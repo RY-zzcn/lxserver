@@ -65,7 +65,7 @@ export const filterMusicInfoItem = item => {
  * @param {*} options
  * @param {*} retryNum
  */
-const createMusicuFetch = async(data, options, retryNum = 0) => {
+const createMusicuFetch = async (data, options, retryNum = 0) => {
   if (retryNum > 2) throw new Error('try max num')
 
   let result
@@ -84,7 +84,7 @@ const createMusicuFetch = async(data, options, retryNum = 0) => {
         ...data,
       },
       headers: {
-        'User-Angent': 'Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; WOW64; Trident/5.0)',
+        'User-Agent': 'Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; WOW64; Trident/5.0)',
       },
     }).promise
   } catch (err) {
@@ -103,61 +103,48 @@ export default {
    */
   getInfo(id) {
     return createMusicuFetch({
-      req_1: {
-        module: 'music.musichallSinger.SingerInfoInter',
-        method: 'GetSingerDetail',
+      singer: {
+        method: 'get_singer_detail_info',
         param: {
-          singer_mid: [id],
-          ex_singer: 1,
-          wiki_singer: 1,
-          group_singer: 0,
-          pic: 1,
-          photos: 0,
+          sort: 5,
+          singermid: id,
+          sin: 0,
+          num: 50,
         },
-      },
-      req_2: {
-        module: 'music.musichallAlbum.AlbumListServer',
-        method: 'GetAlbumList',
-        param: {
-          singerMid: id,
-          order: 0,
-          begin: 0,
-          num: 1,
-          songNumTag: 0,
-          singerID: 0,
-        },
-      },
-      req_3: {
-        module: 'musichall.song_list_server',
-        method: 'GetSingerSongList',
-        param: {
-          singerMid: id,
-          order: 1,
-          begin: 0,
-          num: 1,
-        },
+        module: 'music.web_singer_info_svr',
       },
     }).then(body => {
-      if (body.req_1.code != 0 || body.req_2 != 0 || body.req_3 != 0) throw new Error('get singer info faild.')
+      if (body.singer.code != 0) throw new Error('get singer info faild.')
 
-      const info = body.req_1.data.singer_list[0]
-      const music = body.req_3.data
-      const album = body.req_3.data
+      const data = body.singer.data
       return {
         source: 'tx',
-        id: info.basic_info.singer_mid,
+        id: data.singer_info.mid,
         info: {
-          name: info.basic_info.name,
-          desc: info.ex_info.desc,
-          avatar: info.pic.pic,
-          gender: info.ex_info.genre === 1 ? 'man' : 'woman',
+          name: data.singer_info.name,
+          desc: data.singer_info.desc || '',
+          avatar: `https://y.gtimg.cn/music/photo_new/T001R300x300M000${data.singer_info.mid}.jpg`,
         },
         count: {
-          music: music.totalNum,
-          album: album.total,
+          music: data.total_song || 0,
+          album: data.total_album || 0,
         },
       }
     })
+  },
+  /**
+   * 获取歌手完整介绍 (Bio)
+   * @param {string} id 歌手 MID
+   */
+  getDesc(id) {
+    return httpFetch(`https://c.y.qq.com/splcloud/fcgi-bin/fcg_get_singer_desc.fcg?singermid=${id}&format=xml&utf8=1&outCharset=utf-8`, {
+      headers: {
+        'Referer': 'https://y.qq.com/portal/singer_detail.html',
+      },
+    }).promise.then(({ body }) => {
+      const match = body.match(/<desc><!\[CDATA\[([\s\S]*?)\]\]><\/desc>/)
+      return match ? match[1].replace(/\n/g, '\n') : ''
+    }).catch(() => '')
   },
   /**
    * 获取歌手专辑列表
@@ -165,31 +152,28 @@ export default {
    * @param {*} page
    * @param {*} limit
    */
-  getAlbumList(id, page = 1, limit = 10) {
-    if (page === 1) page = 0
+  getAlbumList(id, page = 1, limit = 10, order = 'hot') {
     return createMusicuFetch({
-      req: {
-        module: 'music.musichallAlbum.AlbumListServer',
-        method: 'GetAlbumList',
+      singerAlbum: {
+        method: 'get_singer_album',
         param: {
-          singerMid: id,
-          order: 0,
-          begin: page * limit,
+          singermid: id,
+          begin: (page - 1) * limit,
           num: limit,
-          songNumTag: 0,
-          singerID: 0,
+          order: 'time',
         },
+        module: 'music.web_singer_info_svr',
       },
     }).then(body => {
-      if (body.req.code != 0) throw new Error('get singer album faild.')
+      if (body.singerAlbum.code != 0) throw new Error('get singer album faild.')
 
-      const list = this.filterAlbumList(body.req.data.albumList)
+      const list = this.filterAlbumList(body.singerAlbum.data.list)
       return {
         source: 'tx',
         list,
         limit,
         page,
-        total: body.req.data.total,
+        total: body.singerAlbum.data.total,
       }
     })
   },
@@ -199,16 +183,15 @@ export default {
    * @param {*} page
    * @param {*} limit
    */
-  async getSongList(id, page = 1, limit = 100) {
-    if (page === 1) page = 0
+  async getSongList(id, page = 1, limit = 100, order = 'hot') {
     return createMusicuFetch({
       req: {
         module: 'musichall.song_list_server',
         method: 'GetSingerSongList',
         param: {
           singerMid: id,
-          order: 1,
-          begin: page * limit,
+          order: order === 'time' ? 0 : 1, // 0: 最新, 1: 热门
+          begin: (page - 1) * limit,
           num: limit,
         },
       },
@@ -228,20 +211,20 @@ export default {
   filterAlbumList(raw) {
     return raw.map(item => {
       return {
-        id: item.albumID,
-        mid: item.albumMid,
-        count: item.totalNum,
+        id: item.album_id || item.albumID,
+        mid: item.album_mid || item.albumMid,
+        count: item.latest_song?.song_count || item.total_num || item.song_count || item.totalNum || 0,
         info: {
-          name: item.albumName,
-          author: item.singerName,
-          img: `https://y.gtimg.cn/music/photo_new/T002R500x500M000${item.albumMid}.jpg`,
+          name: item.album_name || item.albumName,
+          author: item.singer_name || item.singerName,
+          img: `https://y.gtimg.cn/music/photo_new/T002R500x500M000${item.album_mid || item.albumMid}.jpg`,
           desc: null,
         },
       }
     })
   },
   filterSongList(raw) {
-    raw.map(item => {
+    return raw.map(item => {
       return filterMusicInfoItem(item.songInfo)
     })
   },

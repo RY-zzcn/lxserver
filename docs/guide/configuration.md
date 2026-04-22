@@ -49,7 +49,10 @@ LX Music Sync Server 构建了统一的基础模型骨架（位于 `src/defaultC
 | `CONFIG_PATH` | `''` | String | **外部配置路径**。手动指定一个额外的 `config.js` 文件路径。 |
 | `USER_ENABLE_PATH`  | `true`   | Boolean  | **账户独享存储沙箱隔离体系（关键）**。该状态启动后，底层数据系统即在 `/data` 目录依照活跃用户切分多个离散并并行的卷。确保不同分发设备、多用户的偏好文件不发生数据越权。 |
 | `USER_ENABLE_ROOT`  | `false`  | Boolean  | **根目录扁平化存取覆盖参数**。为 `true` 时，上述的多用户沙盒分卷操作将失效，数据读写降维直接击穿写入系统底册。                                                          |
-| `ENABLE_PUBLIC_USER_RESTRICTION` | `true` | Boolean | **限制公开用户权限**（需配合 `user.enablePublic` 使用）。开启后，非管理员用户将被限制上传、删除公开源、缓存到服务器等敏感操作。 |
+| `ENABLE_PUBLIC_USER_RESTRICTION` | `true` | Boolean | **限制公开用户权限**。开启后，非管理员公开用户将被限制上传、删除公开源、缓存到服务器等敏感操作。 |
+| `ENABLE_LOGIN_USER_CACHE_RESTRICTION` | `false` | Boolean | **限制登录用户缓存设置**。开启后，非管理员登录用户将被限制修改核心缓存项（缓存歌词、缓存歌曲链接、缓存歌曲文件及仅下载模式）。 |
+| `ENABLE_CACHE_SIZE_LIMIT` | `false` | Boolean | **启用自动缓存清理**。开启后，系统将监控并限制用户缓存总量，超出阈值时按 LRU 顺序自动删除最旧文件。 |
+| `CACHE_SIZE_LIMIT` | `2000` | Integer | **缓存容量阈值 (MB)**。自动清理机制生效的容量上限。 |
 
 ### 三、 WebDAV 配置
 
@@ -86,7 +89,13 @@ LX Music Sync Server 构建了统一的基础模型骨架（位于 `src/defaultC
 | `SUBSONIC_ENABLE` | `true` | Boolean | **启用 Subsonic 协议**。开启后允许使用兼容 Subsonic 协议的客户端连接。 |
 | `SUBSONIC_PATH` | `'/rest'` | String | **Subsonic 访问路径**。默认为 `/rest`。 |
 
-### 六、 (高阶特性) CLI 环境下静默预置账户
+### 八、 业务功能扩展配置
+
+| 环境变量映射键 (ENV) | 系统默认值 | 数据类型 | 作用域与适用场景 |
+| :--- | :--- | :--- | :--- |
+| `SINGER_SOURCE_PRIORITY` | `'tx,wy'` | String | **歌手信息源优先级**。控制歌手详情、照片及 Mid 的获取源优先顺序。可选值为 `tx` (腾讯) 和 `wy` (网易)，多个来源用英文逗号隔开，排列靠前者优先尝试。 |
+
+### 九、 (高阶特性) CLI 环境下静默预置账户
 
 借助操作系统层面的预声明策略，用户可以在跳过图形界面配置的情况下，在服务端初始化启动序列内向数据持久层静态写入账户：
 

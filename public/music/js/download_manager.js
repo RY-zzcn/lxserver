@@ -50,8 +50,12 @@ class DownloadManager {
         const idMap = {};
         tasksToPoll.forEach(t => {
             if (t.isServer) {
-                // Support both 'server_<songId>' and 'server_batch_<songId>'
-                const rawId = t.id.replace(/^server_(batch_)?/, '');
+                // Ensure rawId matches backend normalization: {source}_{id}_{quality}
+                let songId = t.song.songmid || t.song.id;
+                if (songId && !String(songId).includes('_') && t.song.source) {
+                    songId = `${t.song.source}_${songId}`;
+                }
+                const rawId = `${songId}_${t.quality || 'unknown'}`;
                 idMap[rawId] = t.id;
             } else {
                 // Local proxy download uses taskId directly
@@ -94,13 +98,13 @@ class DownloadManager {
                         task.lastPolledBytes = progressInfo.received || 0;
                         task.lastPolledTime = Date.now();
 
-                        task.status = progressInfo.status === 'finished' ? 'finished' : 'downloading';
+                        task.status = (progressInfo.status === 'finished' || progressInfo.status === 'exists') ? progressInfo.status : 'downloading';
                         task.progress = progressInfo.progress || 0;
                         task.downloadedBytes = progressInfo.received || 0;
                         task.totalBytes = progressInfo.total || 0;
 
-                        if (progressInfo.status === 'tagging' || progressInfo.status === 'finished') {
-                            task.status = 'finished';
+                        if (progressInfo.status === 'tagging' || progressInfo.status === 'finished' || progressInfo.status === 'exists') {
+                            if (progressInfo.status === 'tagging') task.status = 'finished';
                             task.progress = 100;
                             task.errorMsg = '';
                             // 成功完成后触发歌词同步（补充）
@@ -278,20 +282,40 @@ class DownloadManager {
     }
 
     // Add multiple tasks
-    addTasks(songs) {
-        // Find existing to avoid duplicates if waiting or downloading
-        songs.forEach(song => {
-            // Check if already in queue
-            const existing = this.tasks.find(t => t.song.id === song.id && (t.status === 'waiting' || t.status === 'downloading'));
+    async addTasks(songs) {
+        if (!songs || songs.length === 0) return;
+
+        // Parallelize cache checks for performance
+        const results = await Promise.all(songs.map(async (song) => {
+            const targetPref = song.quality || window.settings?.preferredQuality || '320k';
+            const quality = window.QualityManager ? window.QualityManager.getBestQuality(song, targetPref) : targetPref;
+            const cacheResult = await checkServerCache(song, quality, true);
+            return { song, quality, cacheResult };
+        }));
+
+        let skipCount = 0;
+        for (const { song, quality, cacheResult } of results) {
+            if (cacheResult.exists && !cacheResult.isCollision) {
+                skipCount++;
+                continue; // Skip exact matches
+            }
+
+            // Check if already in queue (with same quality)
+            const existing = this.tasks.find(t => t.song.id === song.id && t.quality === quality && (t.status === 'waiting' || t.status === 'downloading'));
+            const isServerTask = song.isServer || false;
             if (!existing) {
-                const isServerTask = song.isServer || false;
-                const taskId = song.taskId || (isServerTask ? 'server_' : 'dl_') + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                // For server tasks, FORCE a deterministic ID that matches backend track key normalization: {source}_{id}_{quality}
+                let rawId = song.songmid || song.id;
+                if (rawId && !String(rawId).includes('_') && song.source) {
+                    rawId = `${song.source}_${rawId}`;
+                }
+                const taskId = isServerTask ? `server_${rawId}_${quality}` : (song.taskId || `dl_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`);
 
                 this.tasks.push({
                     id: taskId,
                     song: song,
-                    isServer: isServerTask, // Store explicitly on task
-                    quality: song.quality || '',
+                    isServer: isServerTask,
+                    quality: quality,
                     status: 'waiting',
                     errorMsg: '',
                     progress: 0,
@@ -300,10 +324,15 @@ class DownloadManager {
                     speed: 0,
                     retryCount: 0,
                     maxRetries: 2,
-                    controller: null
+                    controller: null,
+                    collisionInfo: cacheResult.isCollision ? cacheResult : null
                 });
             }
-        });
+        }
+
+        if (skipCount > 0 && window.showInfo) {
+            window.showInfo(`${skipCount} 首歌曲已存在，已跳过`);
+        }
 
         // Auto open drawer if needed
         if (this.drawer && this.drawer.classList.contains('translate-x-full')) {
@@ -318,8 +347,6 @@ class DownloadManager {
     // Process the queue based on concurrency limits
     processQueue() {
         // Recalculate true active count including triggered server tasks
-        // A server task is active if its status is 'downloading', 'tagging' or 'waiting' (if waiting specifically locally but server side active?)
-        // Actually, for server tasks, status 'downloading' and 'tagging' are truly active.
         const localActive = this.tasks.filter(t => !t.isServer && t.status === 'downloading').length;
         const serverActive = this.tasks.filter(t => t.isServer && (t.status === 'downloading' || t.status === 'tagging')).length;
         this.activeCount = localActive + serverActive;
@@ -354,8 +381,7 @@ class DownloadManager {
             if (typeof resolveSongUrl !== 'function') throw new Error('resolveSongUrl missing');
 
             // 1. Resolve URL
-            const targetPref = task.quality || window.settings?.preferredQuality || '320k';
-            const quality = window.QualityManager ? window.QualityManager.getBestQuality(task.song, targetPref) : targetPref;
+            const quality = task.quality || (window.QualityManager ? window.QualityManager.getBestQuality(task.song, window.settings?.preferredQuality || '320k') : '320k');
             task.quality = quality;
 
             const result = await resolveSongUrl(task.song, quality, true, true);
@@ -403,11 +429,7 @@ class DownloadManager {
 
         try {
             // 1. Resolve URL and Quality
-            // 始终使用 getBestQuality。如果是单曲下载，task.quality 就是确定的音质；如果是批量，就是用户选中的最高偏好。
-            const targetPref = task.quality || window.settings?.preferredQuality || '320k';
-            const quality = window.QualityManager.getBestQuality(task.song, targetPref);
-
-            // 重要：将降级后的实际音质更新到任务对象中，确保后续 resolve 和 UI 显示一致
+            const quality = task.quality || (window.QualityManager ? window.QualityManager.getBestQuality(task.song, window.settings?.preferredQuality || '320k') : '320k');
             task.quality = quality;
             this.renderTask(task);
 
@@ -430,7 +452,19 @@ class DownloadManager {
             let ext = resolveData.type || 'mp3';
             if (ext.startsWith('flac')) ext = 'flac'; // Handle flac24bit -> flac
             if (ext === '128k' || ext === '320k') ext = 'mp3';
-            const filename = `${task.song.singer} - ${task.song.name}.${ext}`;
+
+            // Determine filename with collision handling
+            let filename = `${task.song.singer} - ${task.song.name}`;
+            if (task.collisionInfo) {
+                const currentMid = task.song.songmid || task.song.id;
+                // If it's a collision (detected during addTasks), apply same suffixing as server
+                if (task.collisionInfo.collisionSource !== task.song.source) {
+                    filename += ` (${task.song.source})`;
+                } else if (task.collisionInfo.collisionSongmid !== currentMid) {
+                    filename += ` (${task.song.source} ${currentMid})`;
+                }
+            }
+            filename += `.${ext}`;
 
             // Check if we need to proxy the download itself across domains
             let shouldProxyDownload = window.settings?.enableProxyDownload || true; // Force proxy for tagging support
@@ -974,9 +1008,9 @@ class DownloadManager {
                     <i class="fas fa-redo text-xs"></i>
                 </button>
             `;
-        } else if (task.status === 'finished') {
+        } else if (task.status === 'finished' || task.status === 'exists') {
             statusBg = 'bg-emerald-100 text-emerald-600';
-            statusText = isServerTask ? '已存云端' : '已完成';
+            statusText = task.status === 'exists' ? '已存在' : (isServerTask ? '已存云端' : '已完成');
             progressWidth = 100;
         } else if (task.status === 'waiting') {
             statusText = isServerTask ? '云端排队' : '等待中';

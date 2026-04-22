@@ -6,10 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LX Music Web</title>
     <script src="/js/config.js"></script>
-    <link rel="icon" href="/music/assets/logo.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="/music/assets/fontawesome/css/all.min.css">
-    <script src="/music/assets/tailwindcss.js"></script>
-    <script src="/music/js/tailwind_setup.js"></script>
+    <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="assets/fontawesome/css/all.min.css">
+    <script src="assets/tailwindcss.js"></script>
+    <script src="js/tailwind_setup.js"></script>
     <style>
         body {
             margin: 0;
@@ -96,13 +96,13 @@
                 const res = await fetch('/api/music/config')
                 const cfg = await res.json()
                 if (!cfg['player.enableAuth']) {
-                    window.location.replace('/music/')
+                    window.location.replace('./')
                     return
                 }
                 const verifyRes = await fetch('/api/music/auth/verify')
                 const verifyData = await verifyRes.json()
                 if (verifyData.valid) {
-                    window.location.replace('/music/')
+                    window.location.replace('./')
                 }
             } catch (e) {
                 console.error('[Login] 初始化检查失败:', e)
@@ -132,7 +132,7 @@
 
                 if (data.success) {
                     submitBtn.innerHTML = '<i class="fas fa-check mr-2"></i>验证成功，跳转中...'
-                    setTimeout(() => window.location.replace('/music/'), 300)
+                    setTimeout(() => window.location.replace('./'), 300)
                 } else {
                     errorDiv.classList.remove('hidden')
                     // 抖动效果

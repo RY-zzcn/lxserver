@@ -129,15 +129,18 @@ async function requestServerLyricCache(song, quality = null, force = false) {
         const songInfoForCache = { ...song };
         if (quality) songInfoForCache.quality = quality;
 
+        const enableOnlyDownloadMode = window.settings?.enableOnlyDownloadMode || false;
+
         await fetch(cacheUrl, {
             method: 'POST',
             headers,
             body: JSON.stringify({
                 songInfo: songInfoForCache,
-                lyricsObj: lyricInfo
+                lyricsObj: lyricInfo,
+                enableOnlyDownloadMode
             })
         });
-        console.log(`[Lyric] 歌曲下载触发的歌词缓存同步成功: ${song.name}`);
+        console.log(`[Lyric] 歌曲下载触发的歌词缓存同步成功: ${song.name} (仅下载模式: ${enableOnlyDownloadMode})`);
     } catch (e) {
         console.warn(`[Lyric] 自动同步歌词缓存失败: ${song.name}`, e);
     }
@@ -218,11 +221,12 @@ async function downloadSong(songOrId, forceQuality = null, suppressAlerts = fals
         const enablePublicRestriction = window.lx_config?.['user.enablePublicRestriction'];
         const isAdmin = !!localStorage.getItem('lx_admin_password');
         const isServerCacheAllowed = window.settings?.enableServerCache === true;
+        const isOnlyDownload = window.settings?.enableOnlyDownloadMode === true;
 
-        if (isPublic && enablePublicRestriction && !isServerCacheAllowed && !isAdmin) {
+        if (isPublic && enablePublicRestriction && !isServerCacheAllowed && !isAdmin && !isOnlyDownload) {
             showError('权限限制：缓存到服务器需要验证管理员。');
             if (typeof window.handleAdminAuth === 'function') {
-                const authorized = await window.handleAdminAuth('缓存到服务器需要验证管理员身份');
+                const authorized = await window.handleAdminAuth('缓存到服务器需要验证管理员身份或开启仅下载模式');
                 if (!authorized) return false;
             } else {
                 return false;
@@ -345,11 +349,12 @@ async function batchDownloadFromList() {
         const enablePublicRestriction = window.lx_config?.['user.enablePublicRestriction'];
         const isAdmin = !!localStorage.getItem('lx_admin_password');
         const isServerCacheAllowed = window.settings?.enableServerCache === true;
+        const isOnlyDownload = window.settings?.enableOnlyDownloadMode === true;
 
-        if (isPublic && enablePublicRestriction && !isServerCacheAllowed && !isAdmin) {
+        if (isPublic && enablePublicRestriction && !isServerCacheAllowed && !isAdmin && !isOnlyDownload) {
             showError('权限限制：缓存到服务器需要验证管理员。');
             if (typeof window.handleAdminAuth === 'function') {
-                const authorized = await window.handleAdminAuth('缓存到服务器需要验证管理员身份');
+                const authorized = await window.handleAdminAuth('缓存到服务器需要验证管理员身份或开启仅下载模式');
                 if (!authorized) return;
             } else {
                 return;

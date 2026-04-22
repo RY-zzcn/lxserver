@@ -530,6 +530,20 @@ export async function handleToggle(req: IncomingMessage, res: ServerResponse) {
             throw new Error('源不存在')
         }
 
+        // 核心安全逻辑：
+        // 1. 如果正在执行的是公共源个人状态切换 (isPublicSourceToggle === true)
+        //    则只需在 server.ts 层面保证用户已登录即可，不需要额外的管理员密码。
+        // 2. 如果正在修改的是全局公共源 (targetOwner === 'open')
+        //    则必须校验管理员密码。
+        if (targetOwner === 'open') {
+            const auth = req.headers['x-frontend-auth']
+            if (auth !== global.lx.config['frontend.password']) {
+                res.writeHead(403, { 'Content-Type': 'application/json' })
+                res.end(JSON.stringify({ success: false, error: '权限不足：管理全局公开自定义源需要验证管理员身份。' }))
+                return
+            }
+        }
+
         if (isPublicSourceToggle) {
             // 普通用户独立记录公开源的开启/关闭状态，不修改公开源属性
             const userStatesPath = path.join(sourcesDir, 'states.json')
@@ -729,6 +743,16 @@ export async function handleDelete(req: IncomingMessage, res: ServerResponse) {
 
         if (!found) {
             throw new Error('源不存在')
+        }
+
+        // 核心安全逻辑：删除全局公开源必须校验管理员权限
+        if (targetOwner === 'open') {
+            const auth = req.headers['x-frontend-auth']
+            if (auth !== global.lx.config['frontend.password']) {
+                res.writeHead(403, { 'Content-Type': 'application/json' })
+                res.end(JSON.stringify({ success: false, error: '权限不足：删除全局公共源需要验证管理员身份。' }))
+                return
+            }
         }
 
         const scriptPath = path.join(sourcesDir, targetId)

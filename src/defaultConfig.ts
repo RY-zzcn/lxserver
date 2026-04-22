@@ -8,6 +8,9 @@ const config: LX.Config = {
   'user.enablePath': true, // 是否开启用户路径
   'user.enableRoot': false, // 是否开启根路径
   'user.enablePublicRestriction': true, // 是否启用公开用户权限限制
+  'user.enableLoginCacheRestriction': false, // 是否启用登录用户缓存限制
+  'user.enableCacheSizeLimit': false, // 是否启用缓存空间限制
+  'user.cacheSizeLimit': 2000, // 缓存空间限制大小 (MB)
 
   maxSnapshotNum: 10, // 公共最大备份快照数
   'list.addMusicLocationType': 'top', // 公共添加歌曲到我的列表时的位置 top | bottom，参考客户端的「设置 → 列表设置 → 添加歌曲到列表时的位置」
@@ -44,6 +47,8 @@ const config: LX.Config = {
   'player.path': '/music', // 播放器路径
   'subsonic.enable': true, // 是否启用 Subsonic 服务
   'subsonic.path': '/rest', // Subsonic 访问路径
+  'singer.sourcePriority': ['tx', 'wy'], // 歌手信息源优先级
+  'cache.namingPattern': 'standard', // 缓存命名规则
 }
 
 export default config

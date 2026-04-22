@@ -38,8 +38,14 @@ function handleBatchSelect(songId, isChecked) {
 function refreshBatchUI() {
     // Check if song list detail is open
     const slDetail = document.getElementById('songlist-detail-view');
+    const artistHeader = document.getElementById('artist-detail-header');
     if (slDetail && !slDetail.classList.contains('hidden')) {
         if (window.SongListManager) window.SongListManager.renderDetail();
+    } else if (artistHeader) {
+        // Artist Detail Mode
+        if (typeof loadArtistSongs === 'function' && window.currentArtistId) {
+            loadArtistSongs(window.currentArtistId, window.currentArtistOrder || 'hot');
+        }
     } else {
         // Fallback to main renderResults (for search view)
         if (typeof renderResults === 'function' && window.viewingPlaylist) {

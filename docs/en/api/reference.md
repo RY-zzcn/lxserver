@@ -22,7 +22,7 @@ Get the overall memory consumption, device online status, and uptime summary.
 - **Header Auth**: `x-frontend-auth: <Admin Password>`
 - `GET /api/users`: Get a list of all users and their passwords.
 - `POST /api/users`: Create a new user (`{"name": "...", "password": "..."}`).
-- `PUT /api/users`: Update a user's password (`{"name": "...", "password": "..."}`).
+- `PUT /api/users`: Update user info (Rename or update password) (`{"name": "OldName", "newName": "NewName", "password": "NewPassword"}`).
 - `DELETE /api/users`: Delete users (`{"names": ["..."], "deleteData": true}`).
 
 ### 1.3 User: Login (`POST /api/user/login`)
@@ -122,3 +122,39 @@ Users can manage music files and lyrics cached on the server.
 - `POST /api/custom-source/toggle`: Enable or disable a source.
 - `POST /api/custom-source/delete`: Delete a custom source.
 - `POST /api/custom-source/reorder`: Reorder custom sources.
+
+---
+
+## 7. Global System Configuration API (Admin Only)
+
+Used by the management dashboard for real-time adjustments of server behavior. Requires `x-frontend-auth`.
+
+- `GET /api/config`: Get all current global configuration items (including final values overridden by env vars).
+- `POST /api/config`: Incrementally update global configuration.
+  - **Body Example**: `{"singer.sourcePriority": ["tx", "wy"], "user.enablePublicRestriction": true}`
+  - **Validation**: Certain fields like `singer.sourcePriority` will be validated for correctness.
+
+---
+
+## 8. Web Player Specific API
+
+Interfaces designed specifically for Web Player frontend logic, supporting Session-based access.
+
+### 8.1 Basic Config & Auth
+- `GET /api/music/config`: **Public interface**, get runtime status configuration of the Web Player.
+  - **Response**: `{"player.enableAuth": boolean, "user.enablePublicRestriction": boolean}`
+- `POST /api/music/auth`: Validate access password and issue `lx_player_session` HttpOnly Cookie upon success.
+- `POST /api/music/auth/logout`: Completely invalidate the current Session.
+- `GET /api/music/auth/verify`: Check if the current Session is still valid.
+
+### 8.2 Enhanced Metadata Details
+- `GET /api/music/artistDetail`: Get rich artist information.
+  - **Params**: `source` (tx/wy), `id` (Artist Mid/ID).
+  - **Returns**: Object with `name`, `desc`, `avatar`, `fans`, etc.
+- `GET /api/music/artistAlbums`: Paged retrieval of artist's album list.
+- `GET /api/music/artistSongs`: Paged retrieval of artist's full song list.
+- `GET /api/music/albumSongs`: Get details of all tracks in a specific album.
+
+### 8.3 Real-time Progress (SSE)
+- `GET /api/music/progress?reqId=xxx`: real-time subscription to external link resolution and cache progress via Server-Sent Events (SSE).
+
