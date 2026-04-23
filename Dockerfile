@@ -19,8 +19,7 @@ FROM node:18-alpine AS final
 
 WORKDIR /server
 
-RUN apk add --update --no-cache \
-    && (apk add --no-cache chromaprint || echo "chromaprint apk not found, will use bundled binary")
+RUN apk add --update --no-cache chromaprint || echo "chromaprint apk not found, will use bundled binary"
 
 COPY --from=builder ./source-code/build-output ./
 
