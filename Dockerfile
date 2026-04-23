@@ -1,38 +1,40 @@
-FROM alpine AS base
+FROM node:18-alpine AS builder
 
-FROM base AS builder
 WORKDIR /source-code
+
 COPY . .
 
 RUN apk add --update \
-  g++ \
-  make \
-  py3-pip \
-  nodejs \
-  npm \
-  && (apk add --no-cache chromaprint || true) \
-  && npm ci && npm run build \
-  && rm -rf node_modules && npm ci --omit=dev \
-  && mkdir build-output \
-  && mv server node_modules config.js index.js package.json public -t build-output
+    g++ \
+    make \
+    python3 \
+    py3-pip \
+    && (apk add --no-cache chromaprint || true) \
+    && npm ci && npm run build \
+    && rm -rf node_modules && npm ci --omit=dev \
+    && mkdir build-output \
+    && mv server node_modules config.js index.js package.json public -t build-output
 
+FROM node:18-alpine AS final
 
-FROM base AS final
 WORKDIR /server
 
-RUN apk add --update --no-cache nodejs \
-  && (apk add --no-cache chromaprint || echo "chromaprint apk not found, will use bundled binary")
+RUN apk add --update --no-cache \
+    && (apk add --no-cache chromaprint || echo "chromaprint apk not found, will use bundled binary")
 
 COPY --from=builder ./source-code/build-output ./
 
 VOLUME /server/data
+
 ENV DATA_PATH '/server/data'
 ENV LOG_PATH '/server/data/logs'
 
 EXPOSE 9527
+
 ENV NODE_ENV 'production'
 ENV PORT 9527
 ENV BIND_IP '0.0.0.0'
+
 # ENV PROXY_HEADER 'x-real-ip'
 # ENV SERVER_NAME 'My Sync Server'
 # ENV MAX_SNAPSHOT_NUM '10'
