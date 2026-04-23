@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lx-music-web-v4';
+const CACHE_NAME = 'lx-music-web-v5';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
@@ -16,10 +16,15 @@ const ASSETS_TO_CACHE = [
     './js/batch_pagination.js',
     './js/single_song_ops.js',
     './js/songlist_manager.js',
+    './js/list_search.js',
+    './js/leaderboard_manager.js',
+    './js/local_music.js',
+    './js/download_manager.js',
     './js/pwa.js',
     './js/theme_manager.js',
     './js/tailwind_setup.js',
     './js/log_viewer.js',
+    './js/ios-background-audio.js',
     // 第三方库
     './assets/tailwindcss.js',
     './js/crypto-js.min.js',

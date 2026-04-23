@@ -2047,27 +2047,24 @@ class App {
         }
 
         // 音质标签
-        if (song.meta && song.meta._qualitys) {
-            const qualitys = song.meta._qualitys;
-            // 优先显示最高音质
-            if (qualitys.flac24bit) {
-                html += '<span class="tag tag-quality hr">Hi-Res</span>';
-            } else if (qualitys.flac) {
-                html += '<span class="tag tag-quality lossless">SQ</span>';
-            } else if (qualitys['320k']) {
-                html += '<span class="tag tag-quality high">HQ</span>';
-            } else if (qualitys['128k']) {
-                // 128k 一般不显示标签，或者显示 standard
-                // html += '<span class="tag tag-quality">PQ</span>';
-            }
-        } else if (song.meta && song.meta.qualitys) { // 兼容旧结构 array
-            const qualitys = song.meta.qualitys;
-            if (qualitys.some(q => q.type === 'flac24bit')) {
-                html += '<span class="tag tag-quality hr">Hi-Res</span>';
-            } else if (qualitys.some(q => q.type === 'flac')) {
-                html += '<span class="tag tag-quality lossless">SQ</span>';
-            } else if (qualitys.some(q => q.type === '320k')) {
-                html += '<span class="tag tag-quality high">HQ</span>';
+        const qualitys = song.meta ? (song.meta._qualitys || song.meta.qualitys) : null;
+        if (qualitys) {
+            if (Array.isArray(qualitys)) {
+                if (qualitys.some(q => q.type === 'flac24bit')) {
+                    html += '<span class="tag tag-quality hr">Hi-Res</span>';
+                } else if (qualitys.some(q => q.type === 'flac')) {
+                    html += '<span class="tag tag-quality lossless">SQ</span>';
+                } else if (qualitys.some(q => q.type === '320k')) {
+                    html += '<span class="tag tag-quality high">HQ</span>';
+                }
+            } else {
+                if (qualitys.flac24bit) {
+                    html += '<span class="tag tag-quality hr">Hi-Res</span>';
+                } else if (qualitys.flac) {
+                    html += '<span class="tag tag-quality lossless">SQ</span>';
+                } else if (qualitys['320k']) {
+                    html += '<span class="tag tag-quality high">HQ</span>';
+                }
             }
         }
 

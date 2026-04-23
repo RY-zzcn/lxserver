@@ -1,11 +1,17 @@
-const CACHE_NAME = 'lx-sync-server-v2';
+const CACHE_NAME = 'lx-sync-server-v3';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
     './style.css',
     './app.js',
+    './js/ui-utils.js',
+    './js/notification-engine.js',
     './icon.svg',
-    './manifest.json'
+    './manifest.json',
+    './vendor/js/marked.min.js',
+    './vendor/fonts/inter.css',
+    './music/assets/tailwindcss.js',
+    './music/assets/fontawesome/css/all.min.css'
 ];
 
 self.addEventListener('install', (event) => {

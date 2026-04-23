@@ -804,70 +804,6 @@
 </head>
 
 <body class="t-bg-main h-screen flex flex-col overflow-hidden t-text-main font-sans">
-    <!-- Manual Index Search Modal -->
-    <div id="modal-manual-index"
-        class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 hidden px-4">
-        <div class="t-bg-panel w-full max-w-2xl h-[85vh] rounded-[2.5rem] shadow-2xl overflow-hidden border t-border-main flex flex-col"
-            id="modal-manual-index-content">
-            <div class="p-6 border-b t-border-main flex-shrink-0">
-                <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-xl font-bold t-text-main tracking-tight">手动关联索引</h3>
-                    <button onclick="LocalMusicManager.closeManualIndexModal()"
-                        class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-                        <i class="fas fa-times t-text-muted text-lg"></i>
-                    </button>
-                </div>
-                <!-- Search Box -->
-                <div class="flex gap-2">
-                    <div class="relative flex-1">
-                        <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 t-text-muted text-sm"></i>
-                        <input type="text" id="manual-index-search-input" placeholder="输入歌曲名、歌手、专辑搜索..."
-                            class="w-full pl-11 pr-4 py-3.5 t-bg-track border t-border-main rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 t-text-main t-bg-main"
-                            onkeyup="if(event.key==='Enter') LocalMusicManager.doManualSearch()">
-                    </div>
-                    <select id="manual-index-source-select"
-                        class="px-4 py-3.5 t-bg-track border t-border-main rounded-2xl text-sm t-text-main focus:outline-none t-bg-main">
-                        <option value="tx" selected>腾讯音乐</option>
-                        <option value="wy">网易音乐</option>
-                        <option value="kg">酷狗音乐</option>
-                        <option value="kw">酷我音乐</option>
-                        <option value="mg">咪咕音乐</option>
-                    </select>
-                    <button onclick="LocalMusicManager.identifyTargetSong()" id="btn-manual-identify"
-                        class="w-12 h-12 flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-500/20 transition-all active:scale-[0.98] shrink-0"
-                        title="识别歌曲特征">
-                        <i class="fas fa-fingerprint text-xl"></i>
-                    </button>
-                    <button id="btn-do-manual-search" onclick="LocalMusicManager.doManualSearch()"
-                        class="px-8 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl shadow-lg shadow-emerald-500/20 transition-all active:scale-[0.98]">
-                        搜索
-                    </button>
-                </div>
-                <div id="manual-index-file-info"
-                    class="mt-4 px-2 py-2 t-bg-track rounded-xl text-[11px] t-text-muted flex items-center gap-3">
-                    <i class="fas fa-file-audio text-emerald-500 text-sm"></i>
-                    <span id="manual-index-target-filename" class="font-mono font-bold truncate">filename.mp3</span>
-                    <span id="manual-index-target-duration"
-                        class="ml-auto bg-emerald-500/10 text-emerald-500 px-2 rounded-full">--:--</span>
-                </div>
-            </div>
-
-            <!-- Results area -->
-            <div id="manual-index-results" class="flex-1 overflow-y-auto p-6 space-y-3">
-                <div class="flex flex-col items-center justify-center h-full opacity-30 mt-10">
-                    <i class="fas fa-magnifying-glass text-6xl mb-4"></i>
-                    <p class="text-sm font-bold tracking-wider">搜索在线歌曲以建立关联</p>
-                </div>
-            </div>
-
-            <div class="p-6 border-t t-border-main flex justify-end gap-3 flex-shrink-0">
-                <button onclick="LocalMusicManager.closeManualIndexModal()"
-                    class="px-8 py-3 t-bg-track hover:t-bg-item-hover t-text-main font-bold rounded-2xl transition-all">
-                    取消
-                </button>
-            </div>
-        </div>
-    </div>
 
     <!-- Main Container -->
     <div class="flex flex-1 overflow-hidden relative">
@@ -3589,10 +3525,7 @@
                     </div>
                 </div>
             </div>
-    </div>
-    </div>
-
-    </main>
+        </main>
     </div>
 
     <!-- Player Detail View (Overlay) -->
@@ -4905,61 +4838,8 @@
         </div>
     </div>
 
+    <!-- Modals Section (Overlays) -->
 
-    <!-- Audio Element -->
-    <audio id="audio-player" crossorigin="anonymous"></audio>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
-    <script src="js/NoSleep.min.js"></script>
-    <script src="js/log_viewer.js"></script>
-    <script src="js/lyric-utils.js"></script>
-    <script src="js/lyric-parser.js"></script>
-    <script src="js/quality.js"></script>
-    <script src="js/user_sync.js"></script>
-    <script src="js/batch_pagination.js"></script>
-    <script src="js/single_song_ops.js"></script>
-    <script src="js/theme_manager.js"></script>
-    <script src="js/list_search.js"></script>
-    <script src="js/songlist_manager.js"></script>
-    <script src="js/leaderboard_manager.js"></script>
-    <script src="js/wave.js"></script>
-    <script src="js/visualizer.js"></script>
-    <script src="js/pwa.js"></script>
-    <script src="js/lyric-card.js"></script>
-    <script src="js/ios-background-audio.js"></script>
-    <script src="js/sound-effects.js"></script>
-    <script src="js/download_manager.js"></script>
-    <script src="js/local_music.js"></script>
-    <script src="app.js"></script>
-    <script>
-        // Setting Tooltips Mobile Support
-        document.addEventListener('click', function (e) {
-            const trigger = e.target.closest('.setting-tooltip-trigger');
-
-            // Close all other tooltips
-            document.querySelectorAll('.setting-tooltip-trigger.is-active').forEach(activeTrigger => {
-                if (activeTrigger !== trigger) {
-                    activeTrigger.classList.remove('is-active');
-                }
-            });
-
-            if (trigger) {
-                // If it's a mobile device (or doesn't support hover)
-                if (window.matchMedia('(hover: none)').matches) {
-                    trigger.classList.toggle('is-active');
-                    e.stopPropagation();
-                }
-            }
-        });
-
-        // Close tooltip when clicking outside
-        document.addEventListener('touchstart', function (e) {
-            if (!e.target.closest('.setting-tooltip-trigger')) {
-                document.querySelectorAll('.setting-tooltip-trigger.is-active').forEach(trigger => {
-                    trigger.classList.remove('is-active');
-                });
-            }
-        }, { passive: true });
-    </script>
     <!-- Add/Edit Token Modal -->
     <div id="modal-add-token"
         class="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 hidden animate-fade-in px-4">
@@ -4973,7 +4853,6 @@
                         <i class="fas fa-times t-text-muted"></i>
                     </button>
                 </div>
-
                 <div id="add-token-form" class="space-y-5">
                     <input type="hidden" id="edit-token-masked" value="">
                     <div>
@@ -4992,8 +4871,6 @@
                             <button type="button" onclick="switchTokenExpireMode('date')" id="btn-expire-date"
                                 class="flex-1 py-2 text-xs font-bold rounded-xl t-text-muted hover:t-text-main transition-all">指定日期</button>
                         </div>
-
-                        <!-- 模式 1: 偏移时长 -->
                         <div id="expire-offset-area" class="flex gap-2">
                             <input type="number" id="new-token-offset-value" placeholder="30"
                                 class="flex-1 px-4 py-3.5 t-bg-track border t-border-main rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/50 t-text-main transition-all">
@@ -5003,15 +4880,12 @@
                                 <option value="d" selected>天</option>
                             </select>
                         </div>
-
-                        <!-- 模式 2: 指定日期 -->
                         <div id="expire-date-area" class="hidden">
                             <input type="datetime-local" id="new-token-exact-date"
                                 class="w-full px-4 py-3.5 t-bg-track border t-border-main rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/50 t-text-main transition-all">
                         </div>
                         <p class="text-[9px] t-text-muted mt-1 ml-1 opacity-60">* 留空或设置为 0 则代表永久有效</p>
                     </div>
-
                     <div class="mt-8 flex gap-4">
                         <button onclick="closeAddTokenModal()"
                             class="flex-1 py-3.5 t-bg-track t-text-main font-bold rounded-2xl hover:opacity-80 transition-all">取消</button>
@@ -5019,7 +4893,6 @@
                             class="flex-[1.5] py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl shadow-lg shadow-emerald-500/20 transition-all active:scale-[0.98]">生成并保存</button>
                     </div>
                 </div>
-
                 <div id="add-token-result" class="hidden space-y-5 animate-fade-in">
                     <div class="p-5 bg-emerald-500/5 dark:bg-emerald-500/10 rounded-2xl border border-emerald-500/20">
                         <p class="text-xs text-emerald-600 dark:text-emerald-400 font-bold mb-3 leading-relaxed">Token
@@ -5063,12 +4936,10 @@
                         </button>
                     </div>
                 </div>
-
                 <div id="token-logs-list"
                     class="space-y-3 overflow-y-auto flex-1 pr-2 custom-scrollbar min-h-[200px] text-[11px] leading-relaxed">
                     <div class="py-12 text-center t-text-muted italic opacity-50">正在加载日志记录...</div>
                 </div>
-
                 <div class="mt-8 flex-shrink-0">
                     <button onclick="closeTokenLogsModal()"
                         class="w-full py-3.5 t-bg-track t-text-main font-bold rounded-2xl hover:opacity-80 transition-all">返回面板</button>
@@ -5076,6 +4947,7 @@
             </div>
         </div>
     </div>
+
     <!-- Remote Overwrite Modal -->
     <div id="modal-remote-overwrite"
         class="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 hidden animate-fade-in px-4">
@@ -5089,7 +4961,6 @@
                         <i class="fas fa-times t-text-muted"></i>
                     </button>
                 </div>
-
                 <div id="remote-overwrite-step1" class="space-y-4">
                     <p class="text-xs t-text-muted leading-relaxed">连接 LX Music 远程服务器，连接成功后可选择数据同步方向。</p>
                     <div>
@@ -5127,7 +4998,6 @@
                         连接远程服务器
                     </button>
                 </div>
-
                 <div id="remote-overwrite-mode-selection" class="hidden space-y-3">
                     <p class="text-xs t-text-muted mb-1 text-center font-medium">连接成功！请选择同步方向：</p>
                     <div class="grid grid-cols-2 gap-2">
@@ -5153,8 +5023,6 @@
                         </button>
                     </div>
                 </div>
-
-                <!-- Step 2: Running (Spinner) -->
                 <div id="remote-overwrite-step2" class="hidden space-y-6 text-center py-4">
                     <div class="flex justify-center">
                         <div
@@ -5166,8 +5034,6 @@
                         <p class="text-xs t-text-muted mt-2">请勿关闭窗口，正在同步歌单数据...</p>
                     </div>
                 </div>
-
-                <!-- Result -->
                 <div id="remote-overwrite-result" class="hidden space-y-6 text-center py-4">
                     <div class="flex justify-center">
                         <div
@@ -5184,13 +5050,131 @@
                 </div>
             </div>
         </div>
-</body>
-<script>
-    function goToAdmin() {
-        var adminPath = (window.CONFIG && window.CONFIG['admin.path']) || '';
-        location.href = adminPath || '/';
-    }
-</script>
+    </div>
+
+    <!-- Manual Index Search Modal -->
+    <div id="modal-manual-index"
+        class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 hidden px-4">
+        <div class="t-bg-panel w-full max-w-2xl h-[85vh] rounded-[2.5rem] shadow-2xl overflow-hidden border t-border-main flex flex-col"
+            id="modal-manual-index-content">
+            <div class="p-6 border-b t-border-main flex-shrink-0">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-xl font-bold t-text-main tracking-tight">手动关联索引</h3>
+                    <button onclick="LocalMusicManager.closeManualIndexModal()"
+                        class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                        <i class="fas fa-times t-text-muted text-lg"></i>
+                    </button>
+                </div>
+                <div class="flex gap-2">
+                    <div class="relative flex-1">
+                        <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 t-text-muted text-sm"></i>
+                        <input type="text" id="manual-index-search-input" placeholder="输入歌曲名、歌手、专辑搜索..."
+                            class="w-full pl-11 pr-4 py-3.5 t-bg-track border t-border-main rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 t-text-main t-bg-main"
+                            onkeyup="if(event.key==='Enter') LocalMusicManager.doManualSearch()">
+                    </div>
+                    <select id="manual-index-source-select"
+                        class="px-4 py-3.5 t-bg-track border t-border-main rounded-2xl text-sm t-text-main focus:outline-none t-bg-main">
+                        <option value="tx" selected>腾讯音乐</option>
+                        <option value="wy">网易音乐</option>
+                        <option value="kg">酷狗音乐</option>
+                        <option value="kw">酷我音乐</option>
+                        <option value="mg">咪咕音乐</option>
+                    </select>
+                    <button onclick="LocalMusicManager.identifyTargetSong()" id="btn-manual-identify"
+                        class="w-12 h-12 flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-500/20 transition-all active:scale-[0.98] shrink-0"
+                        title="识别歌曲特征">
+                        <i class="fas fa-fingerprint text-xl"></i>
+                    </button>
+                    <button id="btn-do-manual-search" onclick="LocalMusicManager.doManualSearch()"
+                        class="px-8 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl shadow-lg shadow-emerald-500/20 transition-all active:scale-[0.98]">
+                        搜索
+                    </button>
+                </div>
+                <div id="manual-index-file-info"
+                    class="mt-4 px-2 py-2 t-bg-track rounded-xl text-[11px] t-text-muted flex items-center gap-3">
+                    <i class="fas fa-file-audio text-emerald-500 text-sm"></i>
+                    <span id="manual-index-target-filename" class="font-mono font-bold truncate">filename.mp3</span>
+                    <span id="manual-index-target-duration"
+                        class="ml-auto bg-emerald-500/10 text-emerald-500 px-2 rounded-full">--:--</span>
+                </div>
+            </div>
+            <div id="manual-index-results" class="flex-1 overflow-y-auto p-6 space-y-3">
+                <div class="flex flex-col items-center justify-center h-full opacity-30 mt-10">
+                    <i class="fas fa-magnifying-glass text-6xl mb-4"></i>
+                    <p class="text-sm font-bold tracking-wider">搜索在线歌曲以建立关联</p>
+                </div>
+            </div>
+            <div class="p-6 border-t t-border-main flex justify-end gap-3 flex-shrink-0">
+                <button onclick="LocalMusicManager.closeManualIndexModal()"
+                    class="px-8 py-3 t-bg-track hover:t-bg-item-hover t-text-main font-bold rounded-2xl transition-all">
+                    取消
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Project Agreement Modal Overlay -->
+    <div id="project-agreement-modal"
+        class="fixed inset-0 z-[100] flex items-center justify-center hidden transition-opacity duration-300">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-md"></div>
+        <div
+            class="relative w-full max-w-lg mx-4 t-bg-panel rounded-3xl shadow-2xl border t-border-main p-8 overflow-hidden animate-slide-up">
+            <div class="flex justify-center mb-6">
+                <div
+                    class="w-16 h-16 bg-emerald-500 text-white rounded-2xl flex items-center justify-center text-3xl shadow-lg shadow-emerald-200">
+                    <i class="fas fa-file-contract"></i>
+                </div>
+            </div>
+            <h2 class="text-2xl font-black t-text-main text-center mb-4">项目使用声明</h2>
+            <div
+                class="t-text-muted text-sm space-y-4 mb-8 leading-relaxed max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar">
+                <p>欢迎使用 LX Music Web 播放器。本项目是一个 <a href="https://github.com/XCQ0607/lxserver" target="_blank"
+                        class="t-text-main hover:text-emerald-500 underline decoration-dotted transition-colors">开源</a>
+                    的音乐同步管理辅助工具，在您开始使用之前，请知晓以下声明：</p>
+                <ul class="list-disc pl-5 space-y-2">
+                    <li>本项目仅供技术学习与交流之用，严禁商业用途。</li>
+                    <li>所有在线音乐数据均为公开接口抓取，本项目不存储、不分发任何版权资源。</li>
+                    <li>由于使用本项目产生的任何法律风险由使用者自行承担。</li>
+                    <li>请于下载或使用后的 24 小时内停止使用并清除相关数据。</li>
+                </ul>
+                <p class="font-bold text-emerald-500">若您点击下方按钮，即代表您已阅读并接受我们的《项目补充协议》。</p>
+            </div>
+            <div class="flex flex-col gap-3">
+                <button onclick="acceptProjectAgreement()"
+                    class="w-full py-4 bg-emerald-500 text-white font-bold rounded-2xl shadow-lg shadow-emerald-500/25 hover:bg-emerald-600 transition-all active:scale-95">
+                    我已阅读并接受
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audio Element -->
+    <audio id="audio-player" crossorigin="anonymous"></audio>
+
+    <!-- External Scripts Section (Placed at the end for performance) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+    <script src="js/NoSleep.min.js"></script>
+    <script src="js/log_viewer.js"></script>
+    <script src="js/lyric-utils.js"></script>
+    <script src="js/lyric-parser.js"></script>
+    <script src="js/quality.js"></script>
+    <script src="js/user_sync.js"></script>
+    <script src="js/batch_pagination.js"></script>
+    <script src="js/single_song_ops.js"></script>
+    <script src="js/theme_manager.js"></script>
+    <script src="js/list_search.js"></script>
+    <script src="js/songlist_manager.js"></script>
+    <script src="js/leaderboard_manager.js"></script>
+    <script src="js/wave.js"></script>
+    <script src="js/visualizer.js"></script>
+    <script src="js/pwa.js"></script>
+    <script src="js/lyric-card.js"></script>
+    <script src="js/ios-background-audio.js"></script>
+    <script src="js/sound-effects.js"></script>
+    <script src="js/download_manager.js"></script>
+    <script src="js/local_music.js"></script>
+    <script src="js/common_ui.js"></script>
+    <script src="app.js"></script>
 </body>
 
 </html>
