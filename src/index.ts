@@ -2,8 +2,8 @@
 
 import fs from 'fs'
 import path from 'path'
-import moduleAlias from 'module-alias'
-moduleAlias.addAliases({
+import { addAliases } from 'module-alias'
+addAliases({
   '@common': path.join(__dirname, 'common'),
   '@renderer': path.join(__dirname, 'modules'),
   '@': __dirname
